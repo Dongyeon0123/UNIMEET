@@ -1,0 +1,64 @@
+server:
+  port: 8080
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://mongo:27017/unimeet
+  redis:
+    host: redis
+    port: 6379
+    password:
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+jwt:
+  secret: "your_jwt_secret_key_here"
+  access-token-expiration: 3600000 # 1시간
+  refresh-token-expiration: 604800000 # 7일
+
+ai:
+  url: http://python-ai:5000/recommend
+
+websocket:
+  endpoint: /ws
+  allowed-origins: "*"
+
+logging:
+  level:
+    org.springframework: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+# CORS 설정
+cors:
+  allowed-origins: "*"
+  allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+  allowed-headers: "*"
+
+---
+# Postman 테스트용 예시
+# 회원가입 요청 예시
+# {
+#   "email": "test@univ.ac.kr",
+#   "nickname": "테스터",
+#   "password": "1234",
+#   "mbti": "INTJ",
+#   "interests": ["음악", "운동"],
+#   "personalityTags": ["외향적", "계획적"],
+#   "bio": "자기소개입니다.",
+#   "idealType": {
+#     "mbti": "ENFP",
+#     "ageRange": [20, 25],
+#     "personalityTags": ["유머러스"]
+#   }
+# } 
