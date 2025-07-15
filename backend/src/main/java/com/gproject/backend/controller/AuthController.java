@@ -61,4 +61,34 @@ public class AuthController {
         boolean exists = userService.checkEmailDuplicate(email);
         return ResultResponse.success(exists);
     }
+
+    /**
+     * 대학교 이메일 인증코드 발송
+     * POST /api/auth/send-univ-email
+     * { "email": "test@kku.ac.kr", "univName": "건국대학교" }
+     */
+    @PostMapping("/send-univ-email")
+    public ResultResponse<?> sendUnivEmail(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String univName = body.get("univName");
+        userService.sendUnivEmailCode(email, univName);
+        return ResultResponse.success("인증코드가 발송되었습니다.");
+    }
+
+    /**
+     * 대학교 이메일 인증코드 검증
+     * POST /api/auth/verify-univ-email
+     * { "email": "test@kku.ac.kr", "code": "123456" }
+     */
+    @PostMapping("/verify-univ-email")
+    public ResultResponse<?> verifyUnivEmail(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String code = body.get("code");
+        boolean result = userService.verifyUnivEmailCode(email, code);
+        if (result) {
+            return ResultResponse.success("이메일 인증 성공");
+        } else {
+            return ResultResponse.fail(400, "인증코드가 올바르지 않거나 만료되었습니다.");
+        }
+    }
 } 
