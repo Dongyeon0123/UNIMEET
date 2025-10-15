@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { Ionicons, Entypo } from '@expo/vector-icons';
 import GradientScreen from '../../component/GradientScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
+import { API_BASE_URL } from '../../utils/env';
+import { createStompConnection, StompConn } from '../../utils/stomp';
 import type { RootStackParamList } from '../../navigation/types';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -31,12 +33,7 @@ const dummyMessages: {
     nickname: string;
     avatar: IoniconName;
     readCount?: number;
-  }[] = [
-    { id: 1, text: '안녕하세요!', mine: false, time: '오전 9:01', nickname: '익명1', avatar: 'person-circle-outline', readCount: 2 },
-    { id: 2, text: '안녕하세요~', mine: true, time: '오전 9:01', nickname: '나', avatar: 'person-circle', readCount: 2 },
-    { id: 3, text: 'React Native 스터디 내일 7시에 만나요!', mine: false, time: '오후 2:38', nickname: '익명2', avatar: 'person-circle-outline', readCount: 3 },
-    { id: 4, text: '네! 장소는 어디에요?', mine: true, time: '오후 3:16', nickname: '나', avatar: 'person-circle', readCount: 3 },
-];
+  }[] = [];
 
 const ChatRoom: React.FC = () => {
   const navigation = useNavigation();
@@ -47,27 +44,81 @@ const ChatRoom: React.FC = () => {
     state.chats.find(r => r.id === roomId)
   );
 
+  const token = useSelector((state: RootState) => state.auth.token);
   const [messages, setMessages] = useState(dummyMessages);
+  const stompRef = useRef<StompConn | null>(null);
   const [input, setInput] = useState('');
   const [showPanel, setShowPanel] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const handleSend = () => {
+  useEffect(() => {
+    // STOMP 연결 및 구독
+    const conn = createStompConnection(token || undefined);
+    stompRef.current = conn;
+
+    const trySubscribe = () => {
+      // 연결 후 구독 시도 (지연 연결 고려)
+      const interval = setInterval(() => {
+        if (conn.client.connected) {
+          clearInterval(interval);
+          conn.subscribe(`/topic/chat/${roomId}`, (msg) => {
+            try {
+              const payload = JSON.parse(msg.body);
+              // 백엔드 메시지 스키마에 맞춰 매핑 필요
+              const incoming = {
+                id: Date.now(),
+                text: payload?.content ?? '',
+                mine: false,
+                time: getKoreanAmPmTime(),
+                nickname: payload?.sender?.nickname ?? '상대',
+                avatar: 'person-circle-outline' as IoniconName,
+                readCount: 1,
+              };
+              setMessages((prev) => [...prev, incoming]);
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+            } catch {}
+          });
+        }
+      }, 200);
+    };
+    trySubscribe();
+
+    return () => {
+      conn.disconnect();
+    };
+  }, [roomId, token]);
+
+  const handleSend = async () => {
     if (!input.trim()) return;
-    setMessages([
-      ...messages,
-      {
-        id: messages.length + 1,
-        text: input,
-        mine: true,
-        time: getKoreanAmPmTime(), // 오전/오후 포맷
-        nickname: '나',
-        avatar: 'person-circle',
-        readCount: 1,
-      },
-    ]);
+    const optimistic = {
+      id: messages.length + 1,
+      text: input,
+      mine: true,
+      time: getKoreanAmPmTime(),
+      nickname: '나',
+      avatar: 'person-circle' as IoniconName,
+      readCount: 1,
+    };
+    setMessages([...messages, optimistic]);
+    const text = input;
     setInput('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      // REST 전송
+      await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({ content: text }),
+      });
+
+      // STOMP 전송 (백엔드가 /app/chat/{roomId} 매핑 시)
+      stompRef.current?.send(`/app/chat/${roomId}`, { content: text });
+    } catch (e) {
+      // 실패 시 간단 안내 (UI 토스트 등으로 대체 가능)
+    }
   };
 
   return (

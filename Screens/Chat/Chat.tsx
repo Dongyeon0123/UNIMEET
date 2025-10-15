@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import GradientScreen from '../../component/GradientScreen';
 import { Ionicons, Entypo } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import Header from '../../navigation/Header';
+import { API_BASE_URL } from '../../utils/env';
 
 const handleNotificationPress = () => {
   alert('채팅에서 알림을 눌렀습니다!');
@@ -16,7 +17,27 @@ const handleNotificationPress = () => {
 const Chat: React.FC = () => {
 
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const chats = useSelector((state: RootState) => state.chats);
+  const token = useSelector((state: RootState) => state.auth.token);
+  const [rooms, setRooms] = useState(useSelector((state: RootState) => state.chats));
+
+  useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat/rooms`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRooms(data);
+        }
+      } catch (e) {
+        // 무시: 네트워크 실패 시 기존 더미 유지
+      }
+    };
+    loadRooms();
+  }, [token]);
 
   const handleRoomPress = (roomId: number) => {
     navigation.navigate('ChatRoom', { roomId });
@@ -35,7 +56,7 @@ const Chat: React.FC = () => {
           <Ionicons name="rocket-outline" size={12} color="#3D3D3D" style={styles.icon} />
           <Text style={styles.commentText}>채팅중에 욕설이나 비하발언은 처벌 대상입니다 !</Text>
         </View>
-        {chats.map(room => (
+        {rooms.map(room => (
           <TouchableOpacity
             key={room.id}
             style={styles.roomCard}

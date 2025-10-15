@@ -16,7 +16,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
-import { loginStart, loginSuccess, loginFailure } from '../../store/authSlice';
+import { loginStart, loginSuccess, loginFailure, setToken } from '../../store/authSlice';
+import { API_BASE_URL } from '../../utils/env';
 import GradientScreen from '../../component/GradientScreen';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -36,26 +37,48 @@ const Login: React.FC = () => {
     }
 
     dispatch(loginStart());
-    
-    // TODO: 실제 로그인 API 호출
-    setTimeout(() => {
-      // 임시 사용자 데이터
-      const userData = {
-        id: '1',
-        email: email,
-        name: '이동연',
-        nickname: '강아지똥',
-        studentId: '20학번',
-        department: '컴퓨터공학과',
-        birth: '2001.01.23',
-        phone: '010-3200-1951',
-        mbti: 'ESTP',
-        interests: ['#운동', '#축구', '#게임'],
-      };
-      
-      dispatch(loginSuccess(userData));
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || '로그인에 실패했어요.');
+      }
+
+      const data = await response.json();
+      // 백엔드 응답 예시 가정: { token: string, user: {...} }
+      if (data?.token) {
+        dispatch(setToken(data.token));
+      }
+      if (data?.user) {
+        dispatch(loginSuccess(data.user));
+      } else {
+        // user 프로필 API가 분리된 경우 즉시 조회 시도
+        const meRes = await fetch(`${API_BASE_URL}/api/user/profile`, {
+          headers: {
+            'Authorization': data?.token ? `Bearer ${data.token}` : '',
+          },
+        });
+        if (meRes.ok) {
+          const me = await meRes.json();
+          dispatch(loginSuccess(me));
+        } else {
+          // 토큰만 받은 경우 최소한 토큰 저장
+          dispatch(loginSuccess({ id: '', email, name: '', nickname: '', studentId: '', department: '', birth: '', phone: '' }));
+        }
+      }
+
       Alert.alert('로그인 성공', '환영합니다!');
-    }, 1500);
+    } catch (err: any) {
+      dispatch(loginFailure(err?.message || '로그인 중 오류가 발생했습니다.'));
+      Alert.alert('오류', err?.message || '로그인 중 오류가 발생했습니다.');
+    }
   };
 
   const goToSignup = () => {

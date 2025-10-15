@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import Header from '../../navigation/Header';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MeetingRoom, Participant, Gender, RootStackParamList } from '../../navigation/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
+import { API_BASE_URL } from '../../utils/env';
 
 interface RoomPreset {
   label: string;
@@ -27,7 +30,7 @@ const Home: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
 
-  // 대충 임의로 만든 데이터들
+  const token = useSelector((state: RootState) => state.auth.token);
   const [meetingRooms, setMeetingRooms] = useState<MeetingRoom[]>([
     {
       id: 1,
@@ -210,7 +213,29 @@ const Home: React.FC = () => {
       ],
       type: 'mixed',
     },
-  ]);  
+  ]);
+
+  // 더미 제거: 서버 데이터가 오면 대체, 서버 미가동이면 빈 목록 유지
+  useEffect(() => {
+    setMeetingRooms([]);
+  }, []);
+
+  useEffect(() => {
+    const loadRooms = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/meetings`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMeetingRooms(data);
+        }
+      } catch (e) {
+        // 무시: 서버 미가동 시 더미 유지
+      }
+    };
+    loadRooms();
+  }, [token]);  
 
   // 모달 상태 및 입력값
   const [modalVisible, setModalVisible] = useState<boolean>(false);
@@ -295,7 +320,49 @@ const Home: React.FC = () => {
         </View>
 
         <View style={styles.guideBox}>
-          <Text style={styles.guideBoxText}>여기는 이용 가이드 / 이미지를 넣는 곳.</Text>
+          <View style={styles.guideHeader}>
+            <View style={styles.guideIcon}>
+              <Ionicons name="sparkles" size={24} color="#6846FF" />
+            </View>
+            <Text style={styles.guideTitle}>UniMeet 시작하기</Text>
+          </View>
+          
+          <View style={styles.guideContent}>
+            <View style={styles.guideStep}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepText}>1</Text>
+              </View>
+              <Text style={styles.stepDescription}>원하는 미팅방을 선택하세요</Text>
+            </View>
+            
+            <View style={styles.guideStep}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepText}>2</Text>
+              </View>
+              <Text style={styles.stepDescription}>프로필을 작성하고 신청하세요</Text>
+            </View>
+            
+            <View style={styles.guideStep}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepText}>3</Text>
+              </View>
+              <Text style={styles.stepDescription}>새로운 인연을 만나보세요!</Text>
+            </View>
+          </View>
+          
+          <View style={styles.guideFooter}>
+            <Ionicons name="heart" size={16} color="#FF6B81" />
+            <Text style={styles.guideFooterText}>지금 시작해보세요</Text>
+            <Ionicons name="heart" size={16} color="#FF6B81" />
+          </View>
+          
+          <TouchableOpacity style={styles.aiMatchingBtn} onPress={() => navigation.navigate('AIMatching')}>
+            <View style={styles.aiIconContainer}>
+              <Ionicons name="analytics" size={20} color="#FFF" />
+            </View>
+            <Text style={styles.aiMatchingText}>AI 매칭 분석</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFF" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.meetingContainer}>
@@ -574,17 +641,108 @@ const styles = StyleSheet.create({
   },
   guideBox: {
     width: '100%',
-    height: 100,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor:
-    '#D1D0D0',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 30,
+    shadowColor: '#6846FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(104, 70, 255, 0.1)',
   },
-  guideBoxText: {
-    textAlign: 'center',
-    color: '#3D3D3D'
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  guideIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(104, 70, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  guideTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  guideContent: {
+    marginBottom: 16,
+  },
+  guideStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  stepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#6846FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  stepText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  stepDescription: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+    lineHeight: 20,
+  },
+  guideFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 107, 129, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  guideFooterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF6B81',
+    marginHorizontal: 8,
+  },
+  aiMatchingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6846FF',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    shadowColor: '#6846FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  aiIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  aiMatchingText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
   },
   text1: { fontSize: 18,
     fontWeight: 'bold',

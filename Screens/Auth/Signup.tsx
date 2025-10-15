@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientScreen from '../../component/GradientScreen';
+import { API_BASE_URL } from '../../utils/env';
 import type { RootStackParamList } from '../../navigation/types';
 
 interface SignupForm {
@@ -108,14 +109,33 @@ const Signup: React.FC = () => {
     if (!validateStep2()) return;
 
     setIsLoading(true);
-    
-    // TODO: 실제 회원가입 API 호출
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          name: form.name,
+          nickname: form.nickname,
+          studentId: form.studentId,
+          department: form.department,
+          birth: form.birth,
+          phone: form.phone,
+        }),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || '회원가입에 실패했습니다.');
+      }
       setIsLoading(false);
       Alert.alert('회원가입 완료', '프로필 설정을 진행해주세요!', [
         { text: '확인', onPress: () => navigation.navigate('OnboardingMBTI') }
       ]);
-    }, 2000);
+    } catch (err: any) {
+      setIsLoading(false);
+      Alert.alert('오류', err?.message || '회원가입 중 오류가 발생했습니다.');
+    }
   };
 
   const renderStep1 = () => (

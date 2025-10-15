@@ -1,20 +1,20 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { RootStackParamList } from '../../navigation/types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
+import { API_BASE_URL } from '../../utils/env';
 
 const { width } = Dimensions.get('window');
 
-// 참가자 정보 카드 컴포넌트 (가로형)
 const ParticipantInfo: React.FC<{ p: any; color: string; index: number }> = ({ p, color, index }) => (
   <View style={styles.participantCard}>
-    {/* 상태 표시 */}
     <View style={[styles.statusIndicator, { backgroundColor: p.isOnline ? '#4CAF50' : '#FFC107' }]} />
     
-    {/* 왼쪽: 아바타 및 기본 정보 */}
     <View style={styles.leftSection}>
       <View style={[styles.avatarContainer, { borderColor: (p.department && p.department !== '미정') ? color : '#999' }]}>
         <Ionicons name="person" size={20} color={(p.department && p.department !== '미정') ? color : '#999'} />
@@ -29,7 +29,6 @@ const ParticipantInfo: React.FC<{ p: any; color: string; index: number }> = ({ p
       </View>
     </View>
     
-    {/* 오른쪽: 상세 정보 */}
     <View style={styles.rightSection}>
       <View style={styles.detailRow}>
         <View style={styles.detailItem}>
@@ -63,7 +62,23 @@ function chunkArray(arr: any[], size: number) {
 const RoomDetail: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'RoomDetail'>>();
-  const { room } = route.params;
+  const token = useSelector((state: RootState) => state.auth.token);
+  const [room, setRoom] = useState(route.params.room);
+
+  useEffect(() => {
+    const loadDetail = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setRoom(data);
+        }
+      } catch (e) {}
+    };
+    loadDetail();
+  }, [room.id, token]);
 
   const maleList = room.participants.filter(p => p.gender === '남');
   const femaleList = room.participants.filter(p => p.gender === '여');
@@ -197,7 +212,28 @@ const RoomDetail: React.FC = () => {
               <Text style={styles.fullButtonText}>인원이 다 찼어요 ({room.participants.length}/{maxParticipants})</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.applyButton}>
+            <TouchableOpacity
+              style={styles.applyButton}
+              onPress={async () => {
+                try {
+                  await fetch(`${API_BASE_URL}/api/meetings/${room.id}/apply`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': token ? `Bearer ${token}` : '',
+                    },
+                  });
+                  // 성공 시 상세 재로딩
+                  const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
+                    headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setRoom(data);
+                  }
+                } catch (e) {}
+              }}
+            >
               <Ionicons name="add-circle" size={20} color="#FFF" />
               <Text style={styles.applyButtonText}>미팅 신청하기 ({room.participants.length}/{maxParticipants})</Text>
             </TouchableOpacity>

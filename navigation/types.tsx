@@ -31,6 +31,7 @@ export type RootStackParamList = {
   PostDetail: { postId: number };
   ChatRoom: { roomId: number };
   WritePost: undefined;
+  AIMatching: undefined;
   Login: undefined;
   Signup: undefined;
   OnboardingMBTI: undefined;

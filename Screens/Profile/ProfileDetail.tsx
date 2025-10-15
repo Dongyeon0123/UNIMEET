@@ -1,14 +1,37 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import GradientScreen from '../../component/GradientScreen';
+import { API_BASE_URL } from '../../utils/env';
+import { updateProfile } from '../../store/profileSlice';
 
 const ProfileDetail: React.FC = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const profile = useSelector((state: RootState) => state.profile);
+  const token = useSelector((state: RootState) => state.auth.token);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          dispatch(updateProfile(data));
+        }
+      } catch (e) {
+        // 무시: 네트워크 오류 시 로컬 상태 표시
+      }
+    };
+    fetchProfile();
+  }, [dispatch, token]);
 
   const myInfoList: {
     label: string;

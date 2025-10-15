@@ -18,6 +18,7 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   error: string | null;
+  token?: string | null;
 }
 
 const initialState: AuthState = {
@@ -25,6 +26,7 @@ const initialState: AuthState = {
   user: null,
   isLoading: false,
   error: null,
+  token: null,
 };
 
 const authSlice = createSlice({
@@ -40,6 +42,9 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.user = action.payload;
       state.error = null;
+    },
+    setToken(state, action: PayloadAction<string | null>) {
+      state.token = action.payload;
     },
     loginFailure(state, action: PayloadAction<string>) {
       state.isLoading = false;
@@ -63,6 +68,7 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.user = null;
       state.error = null;
+      state.token = null;
     },
     clearError(state) {
       state.error = null;
@@ -78,6 +84,7 @@ const authSlice = createSlice({
 export const {
   loginStart,
   loginSuccess,
+  setToken,
   loginFailure,
   signupStart,
   signupSuccess,
