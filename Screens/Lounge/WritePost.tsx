@@ -12,13 +12,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { addPost } from '../../store/postsSlice';
+import { RootState } from '../../store';
+import { API_BASE_URL } from '../../utils/env';
 import GradientScreen from '../../component/GradientScreen';
 
 const WritePost: React.FC = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
+  const token = useSelector((state: RootState) => state.auth.token);
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -32,30 +35,33 @@ const WritePost: React.FC = () => {
 
     setIsLoading(true);
 
-    // 새 게시글 생성
-    const newPost = {
-      id: Date.now(), // 임시 ID (실제로는 백엔드에서 생성)
-      title: title.trim(),
-      text: content.trim() || undefined,
-      author: '익명', // 실제로는 현재 사용자 닉네임
-      date: new Date().toLocaleDateString('ko-KR', {
-        month: 'numeric',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      likes: 0,
-    };
-
-    // Redux store에 게시글 추가
-    dispatch(addPost(newPost));
-
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/posts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          text: content.trim(),
+          anonymous: true,
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || '등록에 실패했습니다.');
+      }
+      const created = await res.json();
+      dispatch(addPost(created));
       setIsLoading(false);
       Alert.alert('완료', '게시글이 등록되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() }
       ]);
-    }, 1000);
+    } catch (e: any) {
+      setIsLoading(false);
+      Alert.alert('오류', e?.message || '등록 중 오류가 발생했습니다.');
+    }
   };
 
   const handleClose = () => {

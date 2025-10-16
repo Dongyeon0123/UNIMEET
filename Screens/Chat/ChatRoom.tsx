@@ -45,6 +45,7 @@ const ChatRoom: React.FC = () => {
   );
 
   const token = useSelector((state: RootState) => state.auth.token);
+  const me = useSelector((state: RootState) => state.auth.user);
   const [messages, setMessages] = useState(dummyMessages);
   const stompRef = useRef<StompConn | null>(null);
   const [input, setInput] = useState('');
@@ -52,6 +53,42 @@ const ChatRoom: React.FC = () => {
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
+    // 히스토리 로드
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/messages`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = (Array.isArray(data) ? data : []).map((m: any, idx: number) => ({
+            id: m.id || idx + 1,
+            text: m.content || '',
+            mine: m.senderId === me?.id,
+            time: getKoreanAmPmTime(),
+            nickname: m.sender || (m.senderId === me?.id ? '나' : '상대'),
+            avatar: (m.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
+            readCount: m.read ? 1 : 0,
+          }));
+          setMessages(mapped);
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      } catch {}
+      // 읽음 처리
+      try {
+        if (me?.id) {
+          await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/read`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
+            body: JSON.stringify({ userId: me.id }),
+          });
+        }
+      } catch {}
+    })();
+
     // STOMP 연결 및 구독
     const conn = createStompConnection(token || undefined);
     stompRef.current = conn;

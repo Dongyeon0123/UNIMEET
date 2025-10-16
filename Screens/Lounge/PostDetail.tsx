@@ -1,25 +1,40 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, TextInput, Alert } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons, Entypo } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import type { RootStackParamList } from '../../navigation/types';
 import GradientScreen from '../../component/GradientScreen';
+import { API_BASE_URL } from '../../utils/env';
 
 const PostDetail: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RootStackParamList, 'PostDetail'>>();
   const { postId } = route.params;
 
-  // Redux에서 해당 게시글의 댓글만 필터링
-  const comments = useSelector((state: RootState) =>
-    state.comments.filter(c => c.postId === postId)
-  );
+  const token = useSelector((state: RootState) => state.auth.token);
+  const [post, setPost] = useState<any>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [input, setInput] = useState('');
 
-  const post = useSelector((state: RootState) =>
-    state.posts.find(p => p.id === postId)
-  );
+  useEffect(() => {
+    const loadAll = async () => {
+      try {
+        const p = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        if (p.ok) setPost(await p.json());
+      } catch {}
+      try {
+        const c = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        if (c.ok) setComments(await c.json());
+      } catch {}
+    };
+    loadAll();
+  }, [postId, token]);
 
   if (!post) {
     return (
@@ -59,8 +74,8 @@ const PostDetail: React.FC = () => {
             <View style={styles.metaRow}>
               <Ionicons name="person-circle" size={32} color="#B1B1B1" style={{ marginRight: 8 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.author}>{post.author}</Text>
-                <Text style={styles.date}>{post.date}</Text>
+                <Text style={styles.author}>{post.author || post.nickname || '-'}</Text>
+                <Text style={styles.date}>{post.createdAt || ''}</Text>
               </View>
               <TouchableOpacity onPress={() => alert('더보기')}>
                 <Entypo name="dots-three-horizontal" size={18} color="#B1B1B1" />
@@ -72,9 +87,23 @@ const PostDetail: React.FC = () => {
             <Text style={styles.text}>{post.text}</Text>
             {/* 액션바 */}
             <View style={styles.actionBar}>
-              <TouchableOpacity style={styles.actionBtn}>
-                <Ionicons name="heart-outline" size={18} color="#FF6B81" />
-                <Text style={styles.actionText}>{post.likes}</Text>
+              <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+                try {
+                  const liked = post?.likedByMe;
+                  const method = liked ? 'DELETE' : 'POST';
+                  const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/like`, {
+                    method,
+                    headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                  });
+                  if (res.ok) {
+                    // 간단 재조회
+                    const p = await fetch(`${API_BASE_URL}/api/posts/${postId}`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+                    if (p.ok) setPost(await p.json());
+                  }
+                } catch {}
+              }}>
+                <Ionicons name={post?.likedByMe ? "heart" : "heart-outline"} size={18} color="#FF6B81" />
+                <Text style={styles.actionText}>{post.likes ?? 0}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionBtn}>
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color="#B092FF" />
@@ -100,19 +129,62 @@ const PostDetail: React.FC = () => {
                   <Ionicons name="person-circle-outline" size={22} color="#B092FF" style={{ marginRight: 8 }} />
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                      <Text style={styles.commentAuthor}>{comment.author}</Text>
-                      <Text style={styles.commentDate}>{comment.date}</Text>
+                      <Text style={styles.commentAuthor}>{comment.author || comment.nickname || '-'}</Text>
+                      <Text style={styles.commentDate}>{comment.createdAt || ''}</Text>
                     </View>
                     <Text style={styles.comment1}>{comment.text}</Text>
                   </View>
-                  <TouchableOpacity style={styles.commentLikeBtn}>
-                    <Ionicons name="heart-outline" size={15} color="#FF6B81" />
+                  <TouchableOpacity style={styles.commentLikeBtn} onPress={async () => {
+                    try {
+                      const liked = comment?.likedByMe;
+                      const method = liked ? 'DELETE' : 'POST';
+                      const res = await fetch(`${API_BASE_URL}/api/comments/${comment.id}/like`, {
+                        method,
+                        headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                      });
+                      if (res.ok) {
+                        const c = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+                        if (c.ok) setComments(await c.json());
+                      }
+                    } catch {}
+                  }}>
+                    <Ionicons name={comment?.likedByMe ? "heart" : "heart-outline"} size={15} color="#FF6B81" />
                     <Text style={styles.commentLikeText}>{comment.likes ?? 0}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.commentDivider} />
               </React.Fragment>
             ))}
+            {/* 댓글 입력 */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+              <TextInput
+                style={{ flex: 1, backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, height: 40 }}
+                placeholder="댓글을 입력하세요"
+                value={input}
+                onChangeText={setInput}
+              />
+              <TouchableOpacity style={{ marginLeft: 10 }} onPress={async () => {
+                if (!input.trim()) return;
+                try {
+                  const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': token ? `Bearer ${token}` : '',
+                    },
+                    body: JSON.stringify({ content: input.trim(), anonymous: true }),
+                  });
+                  if (!res.ok) throw new Error(await res.text());
+                  setInput('');
+                  const c = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
+                  if (c.ok) setComments(await c.json());
+                } catch (e: any) {
+                  Alert.alert('오류', e?.message || '댓글 등록 실패');
+                }
+              }}>
+                <Ionicons name="send" size={20} color="#6846FF" />
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </View>

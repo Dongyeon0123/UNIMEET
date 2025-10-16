@@ -18,6 +18,7 @@ const Chat: React.FC = () => {
 
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const token = useSelector((state: RootState) => state.auth.token);
+  const me = useSelector((state: RootState) => state.auth.user);
   const [rooms, setRooms] = useState(useSelector((state: RootState) => state.chats));
 
   useEffect(() => {
@@ -30,14 +31,29 @@ const Chat: React.FC = () => {
         });
         if (res.ok) {
           const data = await res.json();
-          setRooms(data);
+          const list = Array.isArray(data) ? data : (data.chatRooms || []);
+          // 안읽음 카운트 로드
+          const withUnread = await Promise.all(list.map(async (r: any) => {
+            try {
+              if (!me?.id) return { ...r, unread: r.unread ?? 0 };
+              const u = await fetch(`${API_BASE_URL}/api/chat/rooms/${r.id}/unread-count?userId=${me.id}`, {
+                headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+              });
+              if (u.ok) {
+                const { count } = await u.json();
+                return { ...r, unread: count };
+              }
+            } catch {}
+            return { ...r, unread: r.unread ?? 0 };
+          }));
+          setRooms(withUnread);
         }
       } catch (e) {
         // 무시: 네트워크 실패 시 기존 더미 유지
       }
     };
     loadRooms();
-  }, [token]);
+  }, [token, me?.id]);
 
   const handleRoomPress = (roomId: number) => {
     navigation.navigate('ChatRoom', { roomId });

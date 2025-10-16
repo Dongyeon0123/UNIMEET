@@ -37,6 +37,9 @@ export type RootStackParamList = {
   OnboardingMBTI: undefined;
   OnboardingInterests: { mbti?: string };
   OnboardingHeight: { mbti?: string; interests?: string[] };
+  EmailVerification: { email: string };
+  ProfileEdit: undefined;
+  Notifications: undefined;
 };
 
 

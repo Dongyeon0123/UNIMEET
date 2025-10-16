@@ -223,7 +223,7 @@ const Home: React.FC = () => {
   useEffect(() => {
     const loadRooms = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/meetings`, {
+        const res = await fetch(`${API_BASE_URL}/api/meetings/available`, {
           headers: { 'Authorization': token ? `Bearer ${token}` : '' },
         });
         if (res.ok) {

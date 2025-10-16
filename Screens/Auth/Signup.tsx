@@ -16,6 +16,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientScreen from '../../component/GradientScreen';
 import { API_BASE_URL } from '../../utils/env';
+import { fetchWithTimeout } from '../../utils/http';
 import type { RootStackParamList } from '../../navigation/types';
 
 interface SignupForm {
@@ -28,6 +29,7 @@ interface SignupForm {
   department: string;
   birth: string;
   phone: string;
+  gender: string; // "남" 또는 "여"
 }
 
 const Signup: React.FC = () => {
@@ -43,6 +45,7 @@ const Signup: React.FC = () => {
     department: '',
     birth: '',
     phone: '',
+    gender: '',
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -62,13 +65,13 @@ const Signup: React.FC = () => {
       return false;
     }
     
-    if (!email.includes('@')) {
-      Alert.alert('오류', '올바른 이메일 형식을 입력해주세요.');
+    if (!/^[^@\s]+@kku\.ac\.kr$/.test(email)) {
+      Alert.alert('오류', '건국대학교 이메일(@kku.ac.kr)만 사용할 수 있습니다.');
       return false;
     }
     
-    if (password.length < 6) {
-      Alert.alert('오류', '비밀번호는 6자 이상이어야 합니다.');
+    if (password.length < 8) {
+      Alert.alert('오류', '비밀번호는 8자 이상이어야 합니다.');
       return false;
     }
     
@@ -81,10 +84,26 @@ const Signup: React.FC = () => {
   };
 
   const validateStep2 = () => {
-    const { name, nickname, studentId, department, birth, phone } = form;
+    const { name, nickname, studentId, department, birth, phone, gender } = form;
     
-    if (!name.trim() || !nickname.trim() || !studentId.trim() || !department.trim() || !birth.trim() || !phone.trim()) {
+    if (!name.trim() || !nickname.trim() || !studentId.trim() || !department.trim() || !birth.trim() || !phone.trim() || !gender.trim()) {
       Alert.alert('오류', '모든 필드를 입력해주세요.');
+      return false;
+    }
+    // 학번: 숫자 9자리 이상 권장 (예: 202012345)
+    if (!/^\d{9,}$/.test(studentId)) {
+      Alert.alert('오류', '학번은 숫자 9자리 이상이어야 합니다.');
+      return false;
+    }
+    // 생년월일: YYYY-MM-DD 형식, 또는 사용자가 점으로 입력한 경우 허용 후 변환
+    const birthNormalized = birth.includes('.') ? birth.replace(/\./g, '-') : birth;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthNormalized)) {
+      Alert.alert('오류', '생년월일은 YYYY-MM-DD 형식이어야 합니다.');
+      return false;
+    }
+    // 성별: 남/여
+    if (!/^(남|여)$/.test(gender)) {
+      Alert.alert('오류', '성별은 "남" 또는 "여"로 입력해주세요.');
       return false;
     }
     
@@ -109,8 +128,21 @@ const Signup: React.FC = () => {
     if (!validateStep2()) return;
 
     setIsLoading(true);
+    const startedAt = Date.now();
+    console.log('[SIGNUP] API_BASE_URL =', API_BASE_URL);
+    console.log('[SIGNUP] Request → /auth/signup (timeout 30000ms)', {
+      email: form.email,
+      name: form.name,
+      nickname: form.nickname,
+      studentId: form.studentId,
+      department: form.department,
+      birth: (form.birth || '').includes('.') ? (form.birth || '').replace(/\./g, '-') : form.birth,
+      phone: form.phone,
+      gender: form.gender,
+      passwordLen: form.password?.length,
+    });
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,21 +152,35 @@ const Signup: React.FC = () => {
           nickname: form.nickname,
           studentId: form.studentId,
           department: form.department,
-          birth: form.birth,
+          birth: (form.birth || '').includes('.') ? (form.birth || '').replace(/\./g, '-') : form.birth, // YYYY-MM-DD
           phone: form.phone,
+          gender: form.gender, // 필수
+          // 선택 항목 (있으면 전송)
+          mbti: undefined,
+          interests: undefined,
+          height: undefined,
         }),
+        timeoutMs: 30000,
       });
+      const elapsed = Date.now() - startedAt;
+      console.log('[SIGNUP] Response ← /auth/signup', response.status, `(${elapsed}ms)`);
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[SIGNUP] Error body:', errorText?.slice(0, 400));
         throw new Error(errorText || '회원가입에 실패했습니다.');
       }
       setIsLoading(false);
-      Alert.alert('회원가입 완료', '프로필 설정을 진행해주세요!', [
-        { text: '확인', onPress: () => navigation.navigate('OnboardingMBTI') }
+      Alert.alert('회원가입 완료', '이메일 인증을 먼저 완료해주세요.', [
+        { text: '인증하러 가기', onPress: () => (navigation as any).navigate('EmailVerification', { email: form.email }) },
+        { text: '나중에', onPress: () => (navigation as any).navigate('OnboardingMBTI') }
       ]);
     } catch (err: any) {
       setIsLoading(false);
-      Alert.alert('오류', err?.message || '회원가입 중 오류가 발생했습니다.');
+      const elapsed = Date.now() - startedAt;
+      const isAbort = err?.name === 'AbortError';
+      console.error('[SIGNUP] Failed after', `${elapsed}ms`, isAbort ? '(AbortError)' : '', err?.message || err);
+      const msg = isAbort ? '요청 시간이 초과되었습니다. 네트워크를 확인해주세요.' : (err?.message || '회원가입 중 오류가 발생했습니다.');
+      Alert.alert('오류', msg);
     }
   };
 
@@ -262,7 +308,7 @@ const Signup: React.FC = () => {
         <Ionicons name="school-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="학번 (예: 20학번)"
+          placeholder="학번 (예: 202012345)"
           placeholderTextColor="#999"
           value={form.studentId}
           onChangeText={(value) => updateForm('studentId', value)}
@@ -286,11 +332,24 @@ const Signup: React.FC = () => {
         <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
         <TextInput
           style={styles.input}
-          placeholder="생년월일 (YYYY.MM.DD)"
+          placeholder="생년월일 (YYYY-MM-DD)"
           placeholderTextColor="#999"
           value={form.birth}
           onChangeText={(value) => updateForm('birth', value)}
           keyboardType="numeric"
+        />
+      </View>
+
+      {/* 성별 */}
+      <View style={styles.inputContainer}>
+        <Ionicons name="male-female-outline" size={20} color="#666" style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="성별 (남/여)"
+          placeholderTextColor="#999"
+          value={form.gender}
+          onChangeText={(value) => updateForm('gender', value)}
+          autoCapitalize="none"
         />
       </View>
 

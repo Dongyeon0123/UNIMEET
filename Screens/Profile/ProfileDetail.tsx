@@ -57,7 +57,7 @@ const ProfileDetail: React.FC = () => {
         <View style={styles.titleBox}>
           <Text style={styles.title}>나의 프로필 상세 정보</Text>
         </View>
-        <TouchableOpacity onPress={() => alert('수정화면으로 이동')} style={styles.sideButton}>
+        <TouchableOpacity onPress={() => (navigation as any).navigate('ProfileEdit')} style={styles.sideButton}>
           <Ionicons name="create-outline" size={24} color="#fff" />
         </TouchableOpacity>
       </View>

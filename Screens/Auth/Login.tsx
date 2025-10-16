@@ -17,7 +17,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { loginStart, loginSuccess, loginFailure, setToken } from '../../store/authSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../../utils/env';
+import { fetchWithTimeout } from '../../utils/http';
 import GradientScreen from '../../component/GradientScreen';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -38,12 +40,13 @@ const Login: React.FC = () => {
 
     dispatch(loginStart());
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
+        timeoutMs: 8000,
       });
 
       if (!response.ok) {
@@ -55,29 +58,30 @@ const Login: React.FC = () => {
       // 백엔드 응답 예시 가정: { token: string, user: {...} }
       if (data?.token) {
         dispatch(setToken(data.token));
+        await AsyncStorage.setItem('auth_token', data.token);
       }
       if (data?.user) {
         dispatch(loginSuccess(data.user));
       } else {
         // user 프로필 API가 분리된 경우 즉시 조회 시도
-        const meRes = await fetch(`${API_BASE_URL}/api/user/profile`, {
+        const meRes = await fetchWithTimeout(`${API_BASE_URL}/api/user/profile`, {
           headers: {
             'Authorization': data?.token ? `Bearer ${data.token}` : '',
           },
+          timeoutMs: 8000,
         });
         if (meRes.ok) {
           const me = await meRes.json();
           dispatch(loginSuccess(me));
         } else {
-          // 토큰만 받은 경우 최소한 토큰 저장
           dispatch(loginSuccess({ id: '', email, name: '', nickname: '', studentId: '', department: '', birth: '', phone: '' }));
         }
       }
 
       Alert.alert('로그인 성공', '환영합니다!');
     } catch (err: any) {
-      dispatch(loginFailure(err?.message || '로그인 중 오류가 발생했습니다.'));
-      Alert.alert('오류', err?.message || '로그인 중 오류가 발생했습니다.');
+      dispatch(loginFailure(err?.name === 'AbortError' ? '요청 시간이 초과되었습니다. 네트워크를 확인해주세요.' : (err?.message || '로그인 중 오류가 발생했습니다.')));
+      Alert.alert('오류', err?.name === 'AbortError' ? '요청 시간이 초과되었습니다. 네트워크를 확인해주세요.' : (err?.message || '로그인 중 오류가 발생했습니다.'));
     }
   };
 
@@ -91,6 +95,21 @@ const Login: React.FC = () => {
 
   return (
     <GradientScreen>
+      {/* 데코레이션 배경 */}
+      <View style={styles.bgDecorations} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(104,70,255,0.28)', 'rgba(156,39,176,0.18)', 'transparent']}
+          style={styles.decorationOne}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        <LinearGradient
+          colors={['rgba(255,107,129,0.22)', 'rgba(177,146,255,0.18)', 'transparent']}
+          style={styles.decorationTwo}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        />
+      </View>
       <KeyboardAvoidingView 
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -185,20 +204,7 @@ const Login: React.FC = () => {
               <View style={styles.dividerLine} />
             </View>
 
-            {/* 소셜 로그인 버튼들 */}
-            <View style={styles.socialButtons}>
-              <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('준비중', '카카오 로그인 준비 중입니다.')}>
-                <View style={[styles.socialButtonContent, { backgroundColor: '#FEE500' }]}>
-                  <Text style={[styles.socialButtonText, { color: '#000' }]}>카카오로 시작하기</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('준비중', 'Google 로그인 준비 중입니다.')}>
-                <View style={[styles.socialButtonContent, { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#DDD' }]}>
-                  <Text style={[styles.socialButtonText, { color: '#333' }]}>Google로 시작하기</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
+            {/* 소셜 로그인 버튼 제거됨 */}
 
             {/* 회원가입 링크 */}
             <View style={styles.signupContainer}>
@@ -215,6 +221,31 @@ const Login: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  bgDecorations: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  decorationOne: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    top: -40,
+    left: -30,
+    transform: [{ rotate: '15deg' }],
+  },
+  decorationTwo: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    bottom: -60,
+    right: -40,
+    transform: [{ rotate: '-10deg' }],
+  },
   container: {
     flex: 1,
   },
@@ -227,16 +258,16 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 28,
   },
   logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
     shadowColor: '#6846FF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -244,7 +275,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
     color: '#333',
     marginBottom: 6,
@@ -253,7 +284,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#666',
     textAlign: 'center',
     fontWeight: '500',
@@ -261,17 +292,17 @@ const styles = StyleSheet.create({
   formContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 20,
-    padding: 24,
+    padding: 26,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 12,
     flex: 1,
-    marginTop: 10,
+    marginTop: 12,
   },
   formTitle: {
-    fontSize: 22,
+    fontSize: 23,
     fontWeight: '700',
     color: '#333',
     textAlign: 'center',
@@ -311,7 +342,7 @@ const styles = StyleSheet.create({
   loginButton: {
     borderRadius: 14,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 22,
   },
   loginButtonDisabled: {
     opacity: 0.6,

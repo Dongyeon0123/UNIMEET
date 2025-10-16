@@ -216,7 +216,7 @@ const RoomDetail: React.FC = () => {
               style={styles.applyButton}
               onPress={async () => {
                 try {
-                  await fetch(`${API_BASE_URL}/api/meetings/${room.id}/apply`, {
+                  await fetch(`${API_BASE_URL}/api/meetings/${room.id}/join`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',

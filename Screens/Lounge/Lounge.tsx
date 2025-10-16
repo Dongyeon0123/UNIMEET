@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import Header from '../../navigation/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
+import { API_BASE_URL } from '../../utils/env';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -11,7 +12,23 @@ import GradientScreen from '../../component/GradientScreen';
 
 const Lounge: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const posts = useSelector((state: RootState) => state.posts);
+  const token = useSelector((state: RootState) => state.auth.token);
+  const [posts, setPosts] = useState(useSelector((state: RootState) => state.posts));
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/posts`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // 기대 응답: 배열 또는 { items: [] } 형태
+          setPosts(Array.isArray(data) ? data : (data.items || []));
+        }
+      } catch (e) {}
+    };
+    loadPosts();
+  }, [token]);
   const comments = useSelector((state: RootState) => state.comments); // 댓글 배열 가져오기
 
   const handleNotificationPress = (): void => {
@@ -40,7 +57,7 @@ const Lounge: React.FC = () => {
           <View style={styles.postList}>
             {posts
               .filter(post => !post.notice)
-              .sort((a, b) => b.id - a.id) // 최신 글이 위로 (ID가 높을수록 최신)
+              .sort((a, b) => (b.id || 0) - (a.id || 0))
               .map(post => {
                 // 실제 댓글 수 계산
                 const commentCount = comments.filter(c => c.postId === post.id).length;
@@ -53,12 +70,12 @@ const Lounge: React.FC = () => {
                     <Text style={styles.postTitle}>{post.title}</Text>
                     {post.text && <Text style={styles.postText}>{post.text}</Text>}
                     <View style={styles.postMeta}>
-                      <Text style={styles.postAuthor}>{post.author}</Text>
-                      <Text style={styles.postDate}>{post.date}</Text>
+                      <Text style={styles.postAuthor}>{post.author || post.nickname || '-'}</Text>
+                      <Text style={styles.postDate}>{post.date || post.createdAt || ''}</Text>
                       <Ionicons name="chatbubble-ellipses-outline" size={14} color="#B092FF" style={{ marginLeft: 8, marginRight: 2 }} />
                       <Text style={styles.postComments}>{commentCount}</Text>
                       <Ionicons name="heart-outline" size={15} color="#FF6B81" style={{ marginLeft: 6, marginRight: 2 }} />
-                      <Text style={styles.postLikes}>{post.likes}</Text>
+                      <Text style={styles.postLikes}>{post.likes || 0}</Text>
                     </View>
                   </TouchableOpacity>
                 );
