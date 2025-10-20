@@ -154,7 +154,7 @@ const Signup: React.FC = () => {
           department: form.department,
           birth: (form.birth || '').includes('.') ? (form.birth || '').replace(/\./g, '-') : form.birth, // YYYY-MM-DD
           phone: form.phone,
-          gender: form.gender, // 필수
+          gender: form.gender, // 필수 (스펙: 남/여)
           // 선택 항목 (있으면 전송)
           mbti: undefined,
           interests: undefined,

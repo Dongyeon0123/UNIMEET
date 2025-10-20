@@ -46,7 +46,7 @@ const Login: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
-        timeoutMs: 8000,
+        timeoutMs: 30000,
       });
 
       if (!response.ok) {
@@ -68,7 +68,7 @@ const Login: React.FC = () => {
           headers: {
             'Authorization': data?.token ? `Bearer ${data.token}` : '',
           },
-          timeoutMs: 8000,
+          timeoutMs: 30000,
         });
         if (meRes.ok) {
           const me = await meRes.json();

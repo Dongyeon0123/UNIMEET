@@ -65,6 +65,53 @@ const RoomDetail: React.FC = () => {
   const token = useSelector((state: RootState) => state.auth.token);
   const [room, setRoom] = useState(route.params.room);
 
+  const normalizeRoom = (raw: any) => {
+    if (!raw) return route.params.room;
+    const uiType = raw?.type === 'MIXED' ? 'mixed' : (raw?.type === 'PAIR' ? 'pair' : (raw?.type || route.params.room.type));
+    const backendParticipants: any[] = Array.isArray(raw?.participants) ? raw.participants : (Array.isArray(raw?.participants?.items) ? raw.participants.items : []);
+    const current = Number(raw?.currentParticipants || backendParticipants.length || 0);
+    const max = Number(raw?.maxParticipants || raw?.capacity || raw?.max || 0);
+
+    // 기본 max 추정: 없으면 타입 기준으로 보수적으로 채움
+    let targetMax = max > 0 ? max : (uiType === 'mixed' ? (current <= 4 ? 4 : 6) : (current <= 2 ? 2 : (current <= 4 ? 4 : 6)));
+
+    const toP = (idx: number, gender: '남' | '여', from?: any) => ({
+      id: idx,
+      name: (from?.name || from?.nickname || ''),
+      gender,
+      department: from?.department || '',
+      age: Number(from?.age || 0),
+      studentId: String(from?.studentId || ''),
+      mbti: String(from?.mbti || ''),
+      interests: Array.isArray(from?.interests) ? from.interests : [],
+    });
+
+    let participants: any[] = [];
+    if (uiType === 'mixed') {
+      const mapped = backendParticipants.map((p, i) => toP(100 + i + 1, (p?.gender === '여' ? '여' : '남'), p));
+      const placeholders = Array.from({ length: Math.max(0, targetMax - mapped.length) }).map((_, i) => toP(1000 + i + 1, '남'));
+      participants = [...mapped, ...placeholders];
+    } else {
+      const existingMale = backendParticipants.filter(p => p?.gender === '남');
+      const existingFemale = backendParticipants.filter(p => p?.gender === '여');
+      const targetMale = Math.ceil(targetMax / 2);
+      const targetFemale = Math.floor(targetMax / 2);
+      const males = existingMale.map((p, i) => toP(200 + i + 1, '남', p));
+      const females = existingFemale.map((p, i) => toP(300 + i + 1, '여', p));
+      const malePlaceholders = Array.from({ length: Math.max(0, targetMale - males.length) }).map((_, i) => toP(400 + i + 1, '남'));
+      const femalePlaceholders = Array.from({ length: Math.max(0, targetFemale - females.length) }).map((_, i) => toP(500 + i + 1, '여'));
+      participants = [...males, ...malePlaceholders, ...females, ...femalePlaceholders];
+    }
+
+    return {
+      ...route.params.room,
+      id: raw?.id || route.params.room.id,
+      title: raw?.title || route.params.room.title,
+      type: uiType,
+      participants,
+    } as any;
+  };
+
   useEffect(() => {
     const loadDetail = async () => {
       try {
@@ -73,39 +120,32 @@ const RoomDetail: React.FC = () => {
         });
         if (res.ok) {
           const data = await res.json();
-          setRoom(data);
+          const normalized = normalizeRoom(data);
+          setRoom(normalized);
         }
       } catch (e) {}
     };
     loadDetail();
   }, [room.id, token]);
 
-  const maleList = room.participants.filter(p => p.gender === '남');
-  const femaleList = room.participants.filter(p => p.gender === '여');
+  const confirmed = room.participants.filter(p => p.name && p.name !== '');
+  const maleList = confirmed.filter(p => p.gender === '남');
+  const femaleList = confirmed.filter(p => p.gender === '여');
   const isMixed = room.type === 'mixed';
   
   // 방 타입에 따른 최대 인원수 계산
   const getMaxParticipants = () => {
-    const currentTotal = room.participants.length;
-    const maleCount = maleList.length;
-    const femaleCount = femaleList.length;
-    
-    if (isMixed) {
-      // 혼성방: 4명 또는 6명
-      if (currentTotal <= 4) return 4;
-      return 6;
-    } else {
-      // 일반방: 남녀 비율을 맞춰야 함
-      if (maleCount === 1 && femaleCount === 1) return 2; // 1:1
-      if (maleCount <= 2 && femaleCount <= 2) return 4; // 2:2
-      return 6; // 3:3
-    }
+    const backendMax = (room as any).maxParticipants || (room as any).capacity || (room as any).max;
+    if (backendMax) return Number(backendMax);
+    if (isMixed) return 6; // 기본 6
+    // pair 기본 4 (2:2)로 보수적 가정
+    return 4;
   };
   
   const maxParticipants = getMaxParticipants();
   
   // 실제로 신청을 받을 수 있는지 판단
-  const canApply = room.participants.length < maxParticipants;
+  const canApply = confirmed.length < maxParticipants;
   const isFull = !canApply;
   
   // 디버깅용
@@ -206,38 +246,53 @@ const RoomDetail: React.FC = () => {
         
         {/* 신청 버튼 */}
         <View style={styles.buttonContainer}>
-          {isFull ? (
-            <TouchableOpacity style={styles.fullButton} disabled>
-              <Ionicons name="people" size={20} color="#999" />
-              <Text style={styles.fullButtonText}>인원이 다 찼어요 ({room.participants.length}/{maxParticipants})</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.applyButton}
-              onPress={async () => {
-                try {
-                  await fetch(`${API_BASE_URL}/api/meetings/${room.id}/join`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': token ? `Bearer ${token}` : '',
-                    },
-                  });
-                  // 성공 시 상세 재로딩
-                  const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
-                    headers: { 'Authorization': token ? `Bearer ${token}` : '' },
-                  });
-                  if (res.ok) {
-                    const data = await res.json();
-                    setRoom(data);
-                  }
-                } catch (e) {}
-              }}
-            >
-              <Ionicons name="add-circle" size={20} color="#FFF" />
-              <Text style={styles.applyButtonText}>미팅 신청하기 ({room.participants.length}/{maxParticipants})</Text>
-            </TouchableOpacity>
-          )}
+          {(() => {
+            const currentUserId = (useSelector as any)((state: RootState) => state.auth.user?.id);
+            const alreadyJoined = currentUserId ? confirmed.some((p: any) => p.userId === currentUserId) : false;
+            if (alreadyJoined) {
+              return (
+                <TouchableOpacity style={styles.fullButton} disabled>
+                  <Ionicons name="checkmark-circle" size={20} color="#999" />
+                  <Text style={styles.fullButtonText}>이미 신청한 미팅방입니다</Text>
+                </TouchableOpacity>
+              );
+            }
+            if (isFull) {
+              return (
+                <TouchableOpacity style={styles.fullButton} disabled>
+                  <Ionicons name="people" size={20} color="#999" />
+                  <Text style={styles.fullButtonText}>인원이 다 찼어요 ({confirmed.length}/{maxParticipants})</Text>
+                </TouchableOpacity>
+              );
+            }
+            return (
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={async () => {
+                  try {
+                    await fetch(`${API_BASE_URL}/api/meetings/${room.id}/join`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : '',
+                      },
+                    });
+                    const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
+                      headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      const normalized = normalizeRoom(data);
+                      setRoom(normalized);
+                    }
+                  } catch (e) {}
+                }}
+              >
+                <Ionicons name="add-circle" size={20} color="#FFF" />
+                <Text style={styles.applyButtonText}>미팅 신청하기 ({confirmed.length}/{maxParticipants})</Text>
+              </TouchableOpacity>
+            );
+          })()}
         </View>
       </ScrollView>
     </LinearGradient>

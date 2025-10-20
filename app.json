@@ -26,8 +26,8 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "API_BASE_URL": "http://localhost:8080",
-      "WEBSOCKET_URL": "http://localhost:8080/ws"
+      "API_BASE_URL": "https://nonvitriolic-overprolix-karly.ngrok-free.dev",
+      "WEBSOCKET_URL": "wss://nonvitriolic-overprolix-karly.ngrok-free.dev/ws"
     }
   }
 }

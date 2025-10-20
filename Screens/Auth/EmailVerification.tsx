@@ -47,7 +47,7 @@ const EmailVerification: React.FC = () => {
       });
       if (!res.ok) throw new Error(await res.text());
       Alert.alert('성공', '이메일 인증이 완료되었습니다.', [
-        { text: '확인', onPress: () => navigation.goBack() }
+        { text: '확인', onPress: () => (navigation as any).replace('Login') }
       ]);
     } catch (e: any) {
       Alert.alert('오류', e?.message || '인증에 실패했습니다.');

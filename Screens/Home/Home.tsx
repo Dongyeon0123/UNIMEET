@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import Header from '../../navigation/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +27,56 @@ const ROOM_PRESETS: RoomPreset[] = [
 ];
 
 const Home: React.FC = () => {
+  const toParticipant = (idx: number, gender: Gender, from?: any): Participant => ({
+    id: idx,
+    name: (from?.name || from?.nickname || ''),
+    gender,
+    department: from?.department || '',
+    age: Number(from?.age || 0),
+    studentId: String(from?.studentId || ''),
+    mbti: String(from?.mbti || ''),
+    interests: Array.isArray(from?.interests) ? from.interests : [],
+  });
+
+  const mapBackendRoomToUI = (raw: any): MeetingRoom => {
+    const uiType: 'pair' | 'mixed' = raw?.type === 'MIXED' ? 'mixed' : 'pair';
+    const max = Number(raw?.maxParticipants || raw?.capacity || raw?.max || (uiType === 'mixed' ? 6 : 4));
+    const current = Number(raw?.currentParticipants || (Array.isArray(raw?.participants) ? raw.participants.length : 0));
+    const backendParticipants: any[] = Array.isArray(raw?.participants) ? raw.participants : [];
+
+    if (uiType === 'mixed') {
+      const mappedExisting = backendParticipants.map((p, i) => toParticipant(i + 1, (p?.gender === '여' ? '여' : '남'), p));
+      const placeholdersNeeded = Math.max(0, max - mappedExisting.length);
+      const placeholders = Array.from({ length: placeholdersNeeded }).map((_, i) => toParticipant(1000 + i + 1, '남'));
+      return {
+        id: (raw?.id as any),
+        title: String(raw?.title || ''),
+        participants: [...mappedExisting, ...placeholders],
+        type: uiType,
+        // @ts-ignore: carry through capacity for label
+        maxParticipants: max,
+      } as any;
+    }
+
+    // pair: 남/여 절반씩 가정
+    const targetMale = Math.ceil(max / 2);
+    const targetFemale = Math.floor(max / 2);
+    const existingMale = backendParticipants.filter(p => p?.gender === '남');
+    const existingFemale = backendParticipants.filter(p => p?.gender === '여');
+    const mappedMale = existingMale.map((p, i) => toParticipant(200 + i + 1, '남', p));
+    const mappedFemale = existingFemale.map((p, i) => toParticipant(300 + i + 1, '여', p));
+    const malePlaceholders = Array.from({ length: Math.max(0, targetMale - mappedMale.length) }).map((_, i) => toParticipant(400 + i + 1, '남'));
+    const femalePlaceholders = Array.from({ length: Math.max(0, targetFemale - mappedFemale.length) }).map((_, i) => toParticipant(500 + i + 1, '여'));
+    return {
+      id: (raw?.id as any),
+      title: String(raw?.title || ''),
+      participants: [...mappedMale, ...malePlaceholders, ...mappedFemale, ...femalePlaceholders],
+      type: uiType,
+      // @ts-ignore
+      maxParticipants: max,
+    } as any;
+  };
+
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
 
@@ -215,27 +265,47 @@ const Home: React.FC = () => {
     },
   ]);
 
-  // 더미 제거: 서버 데이터가 오면 대체, 서버 미가동이면 빈 목록 유지
-  useEffect(() => {
-    setMeetingRooms([]);
-  }, []);
-
-  useEffect(() => {
-    const loadRooms = async () => {
+  // 목록 새로고침: 여러 엔드포인트 순차 시도
+  const refreshRooms = async () => {
+    const endpoints = [
+      '/api/meetings/available',
+      '/api/meetings',
+      '/api/meetings/list',
+    ];
+    for (const ep of endpoints) {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/meetings/available`, {
+        console.log('[HOME][LIST] Request → GET', `${API_BASE_URL}${ep}`);
+        const res = await fetch(`${API_BASE_URL}${ep}`, {
           headers: { 'Authorization': token ? `Bearer ${token}` : '' },
         });
-        if (res.ok) {
-          const data = await res.json();
-          setMeetingRooms(data);
+        const text = await res.text();
+        console.log('[HOME][LIST] Response ←', res.status, text?.slice(0, 400));
+        if (!res.ok) continue;
+        let data: any = {};
+        try { data = JSON.parse(text); } catch {}
+        const list = Array.isArray(data)
+          ? data
+          : (Array.isArray(data?.content)
+              ? data.content
+              : (Array.isArray(data?.meetingRooms) ? data.meetingRooms : []));
+        if (Array.isArray(list)) {
+          const mapped = list.map(mapBackendRoomToUI);
+          setMeetingRooms(mapped as any);
+          return;
         }
       } catch (e) {
-        // 무시: 서버 미가동 시 더미 유지
+        console.warn('[HOME][LIST] Failed on endpoint:', e);
       }
-    };
-    loadRooms();
-  }, [token]);  
+    }
+    // 모든 시도가 실패한 경우 빈 배열 유지
+    setMeetingRooms([]);
+  };
+
+  // 초기 로드 및 토큰 변경 시 새로고침
+  useEffect(() => {
+    setMeetingRooms([]);
+    refreshRooms();
+  }, [token]);
 
   // 모달 상태 및 입력값
   const [modalVisible, setModalVisible] = useState<boolean>(false);
@@ -245,7 +315,9 @@ const Home: React.FC = () => {
   // 인원수 표시
   const getPeopleLabel = (room: MeetingRoom) => {
     if (room.type === 'mixed') {
-      return `${room.participants.length}인`;
+      const confirmed = room.participants.filter(p => p.name && p.name !== '').length;
+      const max = (room as any).maxParticipants || room.participants.length;
+      return `${confirmed}/${max}`;
     }
     const maleCountFilled :number = room.participants.filter(p => p.gender === "남" && p.name !== "").length;
     const femaleCountFilled :number = room.participants.filter(p => p.gender === "여" && p.name !== "").length;
@@ -261,46 +333,49 @@ const Home: React.FC = () => {
     setModalVisible(true);
   };
 
-  const handleAddRoom = () => {
+  const handleAddRoom = async () => {
     if (!roomTitle.trim()) return;
-    const newId = meetingRooms.length ? Math.max(...meetingRooms.map(r => r.id)) + 1 : 1;
-    
-    const participants: Participant[] = [
-      ...Array(selectedPreset.male).fill(null).map((_, idx) => ({
-        id: newId * 100 + idx + 1,
-        name: "",
-        gender: "남" as Gender,
-        department: "",
-        age: 0,
-        studentId: "",
-        mbti: "",
-        interests: [],
-      })),
-      ...Array(selectedPreset.female).fill(null).map((_, idx) => ({
-        id: newId * 100 + selectedPreset.male + idx + 1,
-        name: "",
-        gender: "여" as Gender,
-        department: "",
-        age: 0,
-        studentId: "",
-        mbti: "",
-        interests: [],
-      })),
-    ];
-    
-
-    setMeetingRooms(prev => [
-      ...prev,
-      { 
-        id: newId, 
-        title: roomTitle, 
-        participants,
-        type: selectedPreset.type 
+    try {
+      const payload: any = {
+        title: roomTitle.trim(),
+        description: '',
+        type: (selectedPreset.type === 'mixed' ? 'MIXED' : 'PAIR'),
+        maxParticipants: (selectedPreset.male + selectedPreset.female),
+      };
+      console.log('[MEETING][CREATE] Request → POST', `${API_BASE_URL}/api/meetings/create`, payload);
+      const res = await fetch(`${API_BASE_URL}/api/meetings/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify(payload),
+      });
+      const resText = await res.text();
+      console.log('[MEETING][CREATE] Response ←', res.status, resText?.slice(0, 400));
+      if (!res.ok) {
+        Alert.alert('오류', resText || '미팅방 생성에 실패했습니다.');
+        return;
       }
-    ]);
-    setModalVisible(false);
-    setRoomTitle('');
-    setSelectedPreset(ROOM_PRESETS[0]);
+      // 생성 성공: 응답에 meetingRoom 있으면 낙관적 반영
+      let createdObj: any = {};
+      try { createdObj = JSON.parse(resText); } catch {}
+      const createdRoom = createdObj?.meetingRoom || createdObj;
+      if (createdRoom && createdRoom.id) {
+        const mapped = mapBackendRoomToUI(createdRoom);
+        setMeetingRooms(prev => [mapped as any, ...(prev || [])]);
+      }
+      // 서버 목록 재조회로 최종 상태 동기화
+      // 모달 닫고 초기화 후 목록 재조회
+      setModalVisible(false);
+      setRoomTitle('');
+      setSelectedPreset(ROOM_PRESETS[0]);
+      // 방 목록 새로고침
+      await refreshRooms();
+    } catch (e: any) {
+      console.error('[MEETING][CREATE] Failed:', e?.message || e);
+      Alert.alert('오류', e?.message || '네트워크 오류가 발생했습니다.');
+    }
   };
 
   return (
@@ -377,7 +452,7 @@ const Home: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {meetingRooms.map((room) => {
+        {Array.isArray(meetingRooms) ? meetingRooms.map((room) => {
           const isMixed :boolean = room.type === 'mixed';
           return (
             <TouchableOpacity
@@ -406,18 +481,12 @@ const Home: React.FC = () => {
                 {isMixed ? (
                   <View style={styles.mixedBox}>
                     <Text style={styles.mixedLabel}>혼성</Text>
-                    <View style={styles.mixedParticipantsWrap}>
+                    <View style={styles.mixedGrid}>
                       {room.participants.map((participant) => (
-                        <View key={participant.id} style={styles.mixedParticipantRow}>
-                          <Ionicons name="person" size={15} style={styles.mixedIcon} />
-                          <Text
-                            style={[
-                              styles.participantText,
-                              styles.mixedIcon,
-                              participant.name === "" && styles.noName,
-                            ]}
-                          >
-                            {participant.name === "" ? "없음" : participant.department}
+                        <View key={participant.id} style={[styles.gridCell, participant.name === '' ? styles.gridCellEmpty : null]}>
+                          <Ionicons name="person" size={14} style={[styles.mixedIcon, participant.name === '' ? { opacity: 0.4 } : null]} />
+                          <Text style={[styles.gridCellText, participant.name === '' ? styles.emptyText : null]}>
+                            {participant.name === '' ? '빈 자리' : (participant.department || participant.name)}
                           </Text>
                         </View>
                       ))}
@@ -432,18 +501,19 @@ const Home: React.FC = () => {
                         {room.participants
                           .filter((participant) => participant.gender === "남")
                           .map((participant) => (
-                            <View key={participant.id} style={styles.participantRow}>
-                              <Ionicons name="person" size={12} style={styles.male} />
-                              <Text
-                                style={[
-                                  styles.participantText,
-                                  styles.male,
-                                  participant.name === "" && styles.noName,
-                                ]}
-                              >
-                                {participant.name === "" ? "없음" : participant.department}
-                              </Text>
-                            </View>
+                            participant.name === "" ? (
+                              <View key={`empty-m-${participant.id}`} style={[styles.participantRow, styles.emptySlot]}>
+                                <Ionicons name="person" size={12} style={[styles.male, { opacity: 0.4 }]} />
+                                <Text style={[styles.participantText, styles.emptyText]}>빈 자리</Text>
+                              </View>
+                            ) : (
+                              <View key={participant.id} style={styles.participantRow}>
+                                <Ionicons name="person" size={12} style={styles.male} />
+                                <Text style={[styles.participantText, styles.male]}>
+                                  {participant.department || participant.name}
+                                </Text>
+                              </View>
+                            )
                           ))}
                       </View>
                     </View>
@@ -454,18 +524,19 @@ const Home: React.FC = () => {
                         {room.participants
                           .filter((participant) => participant.gender === "여")
                           .map((participant) => (
-                            <View key={participant.id} style={styles.participantRow}>
-                              <Ionicons name="person" size={12} style={styles.female} />
-                              <Text
-                                style={[
-                                  styles.participantText,
-                                  styles.female,
-                                  participant.name === "" && styles.noName,
-                                ]}
-                              >
-                                {participant.name === "" ? "없음" : participant.department}
-                              </Text>
-                            </View>
+                            participant.name === "" ? (
+                              <View key={`empty-f-${participant.id}`} style={[styles.participantRow, styles.emptySlot]}>
+                                <Ionicons name="person" size={12} style={[styles.female, { opacity: 0.4 }]} />
+                                <Text style={[styles.participantText, styles.emptyText]}>빈 자리</Text>
+                              </View>
+                            ) : (
+                              <View key={participant.id} style={styles.participantRow}>
+                                <Ionicons name="person" size={12} style={styles.female} />
+                                <Text style={[styles.participantText, styles.female]}>
+                                  {participant.department || participant.name}
+                                </Text>
+                              </View>
+                            )
                           ))}
                       </View>
                     </View>
@@ -474,7 +545,7 @@ const Home: React.FC = () => {
               </View>
             </TouchableOpacity>
           );
-        })}
+        }) : null}
       </ScrollView>
 
       {/* 방 만들기 모달 */}
@@ -914,6 +985,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center'
+  },
+  mixedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 6,
+  },
+  gridCell: {
+    width: '46%',
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  gridCellEmpty: {
+    backgroundColor: '#F5F5F5',
+  },
+  gridCellText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  emptySlot: {
+    opacity: 0.7,
+  },
+  emptyText: {
+    color: '#999',
+    fontStyle: 'italic',
   },
   mixedParticipantRow: {
     flexDirection: 'row',
