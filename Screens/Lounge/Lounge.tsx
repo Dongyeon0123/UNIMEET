@@ -97,15 +97,20 @@ const Lounge: React.FC = () => {
                     style={styles.postCard}
                     onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
                   >
+                    {post.anonymous && (
+                      <View style={styles.anonymousBadge}>
+                        <Text style={styles.anonymousText}>익명</Text>
+                      </View>
+                    )}
                     <Text style={styles.postTitle}>{post.title}</Text>
                     {post.text && <Text style={styles.postText}>{post.text}</Text>}
                     <View style={styles.postMeta}>
-                      <Text style={styles.postAuthor}>{post.author || post.nickname || '-'}</Text>
+                      <Text style={styles.postAuthor}>{post.authorName || post.author || post.nickname || '익명'}</Text>
                       <Text style={styles.postDate}>{post.date || post.createdAt || ''}</Text>
                       <Ionicons name="chatbubble-ellipses-outline" size={14} color="#B092FF" style={{ marginLeft: 8, marginRight: 2 }} />
-                      <Text style={styles.postComments}>{commentCount}</Text>
+                      <Text style={styles.postComments}>{post.commentCount || commentCount}</Text>
                       <Ionicons name="heart-outline" size={15} color="#FF6B81" style={{ marginLeft: 6, marginRight: 2 }} />
-                      <Text style={styles.postLikes}>{post.likes || 0}</Text>
+                      <Text style={styles.postLikes}>{post.likeCount || post.likes || 0}</Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -205,6 +210,19 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#999',
+  },
+  anonymousBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FF6B81',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  anonymousText: {
+    fontSize: 10,
+    color: '#FFF',
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',

@@ -24,14 +24,25 @@ const PostDetail: React.FC = () => {
         const p = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
           headers: { 'Authorization': token ? `Bearer ${token}` : '' },
         });
-        if (p.ok) setPost(await p.json());
-      } catch {}
+        if (p.ok) {
+          const data = await p.json();
+          console.log('[POST_DETAIL] 게시글 데이터:', data);
+          setPost(data.post || data); // 백엔드가 { post: {...} } 형식으로 응답
+        }
+      } catch (e) {
+        console.error('[POST_DETAIL] 게시글 로드 에러:', e);
+      }
       try {
         const c = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, {
           headers: { 'Authorization': token ? `Bearer ${token}` : '' },
         });
-        if (c.ok) setComments(await c.json());
-      } catch {}
+        if (c.ok) {
+          const data = await c.json();
+          setComments(data.comments || data); // 백엔드가 { comments: [...] } 형식으로 응답
+        }
+      } catch (e) {
+        console.error('[POST_DETAIL] 댓글 로드 에러:', e);
+      }
     };
     loadAll();
   }, [postId, token]);
@@ -71,10 +82,15 @@ const PostDetail: React.FC = () => {
           {/* 게시글 카드 */}
           <View style={styles.card}>
             {/* 작성자/날짜/더보기 */}
+            {post.anonymous && (
+              <View style={styles.anonymousBadge}>
+                <Text style={styles.anonymousText}>익명</Text>
+              </View>
+            )}
             <View style={styles.metaRow}>
               <Ionicons name="person-circle" size={32} color="#B1B1B1" style={{ marginRight: 8 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.author}>{post.author || post.nickname || '-'}</Text>
+                <Text style={styles.author}>{post.authorName || post.author || post.nickname || '익명'}</Text>
                 <Text style={styles.date}>{post.createdAt || ''}</Text>
               </View>
               <TouchableOpacity onPress={() => alert('더보기')}>
@@ -84,7 +100,7 @@ const PostDetail: React.FC = () => {
             {/* 제목 */}
             <Text style={styles.postTitle}>{post.title}</Text>
             {/* 본문 */}
-            <Text style={styles.text}>{post.text}</Text>
+            <Text style={styles.text}>{post.text || post.content}</Text>
             {/* 액션바 */}
             <View style={styles.actionBar}>
               <TouchableOpacity style={styles.actionBtn} onPress={async () => {
@@ -103,7 +119,7 @@ const PostDetail: React.FC = () => {
                 } catch {}
               }}>
                 <Ionicons name={post?.likedByMe ? "heart" : "heart-outline"} size={18} color="#FF6B81" />
-                <Text style={styles.actionText}>{post.likes ?? 0}</Text>
+                <Text style={styles.actionText}>{post.likeCount ?? post.likes ?? 0}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionBtn}>
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color="#B092FF" />
@@ -129,10 +145,10 @@ const PostDetail: React.FC = () => {
                   <Ionicons name="person-circle-outline" size={22} color="#B092FF" style={{ marginRight: 8 }} />
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                      <Text style={styles.commentAuthor}>{comment.author || comment.nickname || '-'}</Text>
+                      <Text style={styles.commentAuthor}>{comment.authorName || comment.author || comment.nickname || '익명'}</Text>
                       <Text style={styles.commentDate}>{comment.createdAt || ''}</Text>
                     </View>
-                    <Text style={styles.comment1}>{comment.text}</Text>
+                    <Text style={styles.comment1}>{comment.text || comment.content}</Text>
                   </View>
                   <TouchableOpacity style={styles.commentLikeBtn} onPress={async () => {
                     try {
@@ -149,7 +165,7 @@ const PostDetail: React.FC = () => {
                     } catch {}
                   }}>
                     <Ionicons name={comment?.likedByMe ? "heart" : "heart-outline"} size={15} color="#FF6B81" />
-                    <Text style={styles.commentLikeText}>{comment.likes ?? 0}</Text>
+                    <Text style={styles.commentLikeText}>{comment.likeCount ?? comment.likes ?? 0}</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.commentDivider} />
@@ -383,6 +399,19 @@ const styles = StyleSheet.create({
     marginRight: 5,
     marginBottom: 2,
     color: '#3D3D3D',
+  },
+  anonymousBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FF6B81',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  anonymousText: {
+    fontSize: 10,
+    color: '#FFF',
+    fontWeight: '600',
   },
 });
 
