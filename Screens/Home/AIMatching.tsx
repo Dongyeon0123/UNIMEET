@@ -6,74 +6,108 @@ import {
   TouchableOpacity, 
   ScrollView, 
   Dimensions,
-  Animated 
+  Animated,
+  ActivityIndicator 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientScreen from '../../component/GradientScreen';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store';
+import { API_BASE_URL } from '../../utils/env';
 
 const { width, height } = Dimensions.get('window');
 
-// 임시 사용자 데이터
-const mockUsers = [
-  {
-    id: 1,
-    name: '김민수',
-    age: 22,
-    department: '컴퓨터공학과',
-    mbti: 'INTJ',
-    interests: ['코딩', '게임', '영화'],
-    photo: null,
-    personality: ['분석적', '논리적', '독립적'],
-    compatibility: 87
-  },
-  {
-    id: 2,
-    name: '이지영',
-    age: 21,
-    department: '디자인학과',
-    mbti: 'ENFP',
-    interests: ['그림그리기', '음악', '여행'],
-    photo: null,
-    personality: ['창의적', '열정적', '사교적'],
-    compatibility: 92
-  },
-  {
-    id: 3,
-    name: '박준호',
-    age: 23,
-    department: '경영학과',
-    mbti: 'ESTJ',
-    interests: ['독서', '운동', '요리'],
-    photo: null,
-    personality: ['리더십', '계획적', '책임감'],
-    compatibility: 78
-  },
-  {
-    id: 4,
-    name: '정수진',
-    age: 22,
-    department: '심리학과',
-    mbti: 'INFP',
-    interests: ['심리학', '책읽기', '산책'],
-    photo: null,
-    personality: ['공감능력', '직관적', '따뜻함'],
-    compatibility: 85
-  }
-];
-
 const AIMatching: React.FC = () => {
   const navigation = useNavigation();
+  const token = useSelector((state: RootState) => state.auth.token);
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const currentUserGender = useSelector((state: RootState) => state.auth.user?.gender);
+  
+  const [matches, setMatches] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [currentUserIndex, setCurrentUserIndex] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   
   const fadeAnim = new Animated.Value(1);
   const slideAnim = new Animated.Value(0);
 
-  const currentUser = mockUsers[currentUserIndex];
+  // 백엔드에서 매칭 데이터 가져오기
+  useEffect(() => {
+    const loadMatches = async () => {
+      setIsLoading(true);
+      try {
+        console.log('[AI_MATCHING] 매칭 데이터 로드 시작');
+        const res = await fetch(`${API_BASE_URL}/api/matches?limit=10`, {
+          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+        });
+        
+        console.log('[AI_MATCHING] 응답 상태:', res.status);
+        
+        if (res.ok) {
+          const data = await res.json();
+          console.log('[AI_MATCHING] 받은 데이터:', data);
+          
+          const matchList = Array.isArray(data) ? data : (data.matches || []);
+          console.log('[AI_MATCHING] 매칭 개수:', matchList.length);
+          
+          setMatches(matchList);
+          
+          // 백엔드 응답에 이미 사용자 정보가 포함되어 있음
+          const allUsers = matchList.map((match: any) => ({
+            id: match.userId,
+            name: match.name || match.nickname,
+            age: match.age,
+            department: match.department,
+            mbti: match.mbti,
+            interests: match.interests || match.commonInterests || [],
+            gender: match.gender,
+            studentId: match.studentId,
+            height: match.height,
+            prefer: match.prefer,
+            nonPrefer: match.nonPrefer,
+            compatibility: Math.round((match.compatibilityScore || match.score || 0) * 100), // 0.0~1.0 → 0~100%
+            detailedScores: match.detailedScores,
+          })).filter((u: any) => u.id); // userId가 있는 것만 필터링
+          
+          // 성별 필터링: 남자는 여자만, 여자는 남자만
+          const filteredUsers = allUsers.filter((user: any) => {
+            if (!currentUserGender) return true; // 성별 정보 없으면 모두 표시
+            
+            // 남자는 여자만, 여자는 남자만 매칭
+            if (currentUserGender === '남') {
+              return user.gender === '여';
+            } else if (currentUserGender === '여') {
+              return user.gender === '남';
+            }
+            
+            return true;
+          });
+          
+          console.log('[AI_MATCHING] 전체 사용자:', allUsers.length);
+          console.log('[AI_MATCHING] 필터링된 사용자:', filteredUsers.length);
+          console.log('[AI_MATCHING] 현재 사용자 성별:', currentUserGender);
+          setUsers(filteredUsers);
+        } else {
+          console.error('[AI_MATCHING] API 에러:', await res.text());
+        }
+      } catch (e) {
+        console.error('[AI_MATCHING] 로드 에러:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (token) {
+      loadMatches();
+    }
+  }, [token]);
+
+  const currentUser = users[currentUserIndex];
 
   // AI 분석 시뮬레이션
   const startAnalysis = () => {
@@ -96,7 +130,7 @@ const AIMatching: React.FC = () => {
   };
 
   const nextUser = () => {
-    if (currentUserIndex < mockUsers.length - 1) {
+    if (currentUserIndex < users.length - 1) {
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -155,6 +189,48 @@ const AIMatching: React.FC = () => {
     return '낮은 매칭';
   };
 
+  // 로딩 중이거나 사용자가 없을 때
+  if (isLoading) {
+    return (
+      <GradientScreen>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>AI 매칭 분석</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6846FF" />
+            <Text style={styles.loadingText}>AI 매칭 분석 중...</Text>
+          </View>
+        </View>
+      </GradientScreen>
+    );
+  }
+
+  if (users.length === 0) {
+    return (
+      <GradientScreen>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>AI 매칭 분석</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="search-outline" size={60} color="#CCC" />
+            <Text style={styles.emptyText}>매칭된 사용자가 없습니다</Text>
+            <Text style={styles.emptySubText}>프로필을 완성하고 관심사를 추가해보세요!</Text>
+          </View>
+        </View>
+      </GradientScreen>
+    );
+  }
+
   return (
     <GradientScreen>
       <View style={styles.container}>
@@ -178,34 +254,62 @@ const AIMatching: React.FC = () => {
               }
             ]}
           >
-            <View style={styles.userAvatar}>
-              <Ionicons name="person" size={60} color="#6846FF" />
+            <View style={[
+              styles.userAvatar,
+              { 
+                backgroundColor: currentUser.gender === '여' ? 'rgba(255, 107, 129, 0.1)' : 'rgba(104, 70, 255, 0.1)',
+                borderColor: currentUser.gender === '여' ? '#FF6B81' : '#6846FF'
+              }
+            ]}>
+              <Ionicons 
+                name="person" 
+                size={60} 
+                color={currentUser.gender === '여' ? '#FF6B81' : '#6846FF'} 
+              />
             </View>
             
             <View style={styles.userInfo}>
-              <Text style={styles.userName}>{currentUser.name}</Text>
-              <Text style={styles.userAge}>{currentUser.age}세</Text>
-              <Text style={styles.userDepartment}>{currentUser.department}</Text>
+              <Text style={styles.userName}>{currentUser.name || '이름 없음'}</Text>
+              <Text style={styles.userAge}>{currentUser.age || 0}세</Text>
+              <Text style={styles.userDepartment}>{currentUser.department || currentUser.major || '학과 미정'}</Text>
               
-              <View style={styles.mbtiContainer}>
-                <Text style={styles.mbtiText}>{currentUser.mbti}</Text>
-              </View>
+              {currentUser.mbti && (
+                <View style={[
+                  styles.mbtiContainer,
+                  { backgroundColor: currentUser.gender === '여' ? '#FF6B81' : '#6846FF' }
+                ]}>
+                  <Text style={styles.mbtiText}>{currentUser.mbti}</Text>
+                </View>
+              )}
               
-              <View style={styles.interestsContainer}>
-                {currentUser.interests.map((interest, index) => (
-                  <View key={index} style={styles.interestTag}>
-                    <Text style={styles.interestText}>#{interest}</Text>
-                  </View>
-                ))}
-              </View>
+              {currentUser.interests && currentUser.interests.length > 0 && (
+                <View style={styles.interestsContainer}>
+                  {currentUser.interests.map((interest: string, index: number) => (
+                    <View 
+                      key={index} 
+                      style={[
+                        styles.interestTag,
+                        { backgroundColor: currentUser.gender === '여' ? 'rgba(255, 107, 129, 0.1)' : 'rgba(104, 70, 255, 0.1)' }
+                      ]}
+                    >
+                      <Text style={[
+                        styles.interestText,
+                        { color: currentUser.gender === '여' ? '#FF6B81' : '#6846FF' }
+                      ]}>#{interest}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
               
-              <View style={styles.personalityContainer}>
-                {currentUser.personality.map((trait, index) => (
-                  <View key={index} style={styles.personalityTag}>
-                    <Text style={styles.personalityText}>{trait}</Text>
-                  </View>
-                ))}
-              </View>
+              {currentUser.personality && currentUser.personality.length > 0 && (
+                <View style={styles.personalityContainer}>
+                  {currentUser.personality.map((trait: string, index: number) => (
+                    <View key={index} style={styles.personalityTag}>
+                      <Text style={styles.personalityText}>{trait}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </Animated.View>
 
@@ -305,19 +409,19 @@ const AIMatching: React.FC = () => {
             
             <View style={styles.pageIndicator}>
               <Text style={styles.pageText}>
-                {currentUserIndex + 1} / {mockUsers.length}
+                {currentUserIndex + 1} / {users.length}
               </Text>
             </View>
             
             <TouchableOpacity 
-              style={[styles.navButton, currentUserIndex === mockUsers.length - 1 && styles.navButtonDisabled]} 
+              style={[styles.navButton, currentUserIndex === users.length - 1 && styles.navButtonDisabled]} 
               onPress={nextUser}
-              disabled={currentUserIndex === mockUsers.length - 1}
+              disabled={currentUserIndex === users.length - 1}
             >
-              <Text style={[styles.navButtonText, currentUserIndex === mockUsers.length - 1 && styles.navButtonTextDisabled]}>
+              <Text style={[styles.navButtonText, currentUserIndex === users.length - 1 && styles.navButtonTextDisabled]}>
                 다음
               </Text>
-              <Ionicons name="chevron-forward" size={20} color={currentUserIndex === mockUsers.length - 1 ? "#CCC" : "#6846FF"} />
+              <Ionicons name="chevron-forward" size={20} color={currentUserIndex === users.length - 1 ? "#CCC" : "#6846FF"} />
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -590,6 +694,37 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 100,
+  },
+  loadingText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 100,
+  },
+  emptyText: {
+    color: '#333',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  emptySubText: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 40,
   },
 });
 
