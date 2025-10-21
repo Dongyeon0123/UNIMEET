@@ -68,7 +68,9 @@ const ChatRoom: React.FC = () => {
             time: getKoreanAmPmTime(),
             nickname: m.sender || (m.senderId === me?.id ? '나' : '상대'),
             avatar: (m.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
-            readCount: m.read ? 1 : 0,
+            // 내가 보낸 메시지: 상대방이 읽지 않았으면 1 (안 읽음), 읽었으면 0 (읽음)
+            // 상대방이 보낸 메시지: 항상 0 (표시 안 함)
+            readCount: m.senderId === me?.id ? (m.read ? 0 : 1) : 0,
           }));
           setMessages(mapped);
           setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -94,27 +96,37 @@ const ChatRoom: React.FC = () => {
     stompRef.current = conn;
 
     const trySubscribe = () => {
-      // 연결 후 구독 시도 (지연 연결 고려)
+      let attempts = 0;
+      const maxAttempts = 25; // 5초만 시도
+      
       const interval = setInterval(() => {
+        attempts++;
+        
         if (conn.client.connected) {
           clearInterval(interval);
+          console.log('[채팅] 실시간 메시지 구독 시작');
+          
           conn.subscribe(`/topic/chat/${roomId}`, (msg) => {
             try {
               const payload = JSON.parse(msg.body);
-              // 백엔드 메시지 스키마에 맞춰 매핑 필요
               const incoming = {
                 id: Date.now(),
                 text: payload?.content ?? '',
                 mine: payload?.senderId === me?.id,
                 time: getKoreanAmPmTime(),
-                nickname: payload?.sender?.nickname ?? '상대',
+                nickname: payload?.senderNickname ?? payload?.sender?.nickname ?? '상대',
                 avatar: (payload?.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
-                readCount: 1,
+                // 내가 보낸 메시지: 1 (아직 안 읽음)
+                // 상대방이 보낸 메시지: 0 (표시 안 함)
+                readCount: payload?.senderId === me?.id ? 1 : 0,
               };
               setMessages((prev) => [...prev, incoming]);
               setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
             } catch {}
           });
+        } else if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          // 타임아웃 되어도 로그 출력 안 함 (정상 상황)
         }
       }, 200);
     };
@@ -125,21 +137,35 @@ const ChatRoom: React.FC = () => {
     };
   }, [roomId, token]);
 
+  const loadMessages = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/messages`, {
+        headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (Array.isArray(data) ? data : []).map((m: any, idx: number) => ({
+          id: m.id || idx + 1,
+          text: m.content || '',
+          mine: m.senderId === me?.id,
+          time: getKoreanAmPmTime(),
+          nickname: m.sender || (m.senderId === me?.id ? '나' : '상대'),
+          avatar: (m.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
+          // 내가 보낸 메시지: 상대방이 읽지 않았으면 1, 읽었으면 0
+          // 상대방이 보낸 메시지: 항상 0 (표시 안 함)
+          readCount: m.senderId === me?.id ? (m.read ? 0 : 1) : 0,
+        }));
+        setMessages(mapped);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    } catch {}
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
-    const optimistic = {
-      id: messages.length + 1,
-      text: input,
-      mine: true,
-      time: getKoreanAmPmTime(),
-      nickname: '나',
-      avatar: 'person-circle' as IoniconName,
-      readCount: 1,
-    };
-    setMessages([...messages, optimistic]);
     const text = input;
     setInput('');
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    
     try {
       // REST 전송
       await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/messages`, {
@@ -150,11 +176,11 @@ const ChatRoom: React.FC = () => {
         },
         body: JSON.stringify({ content: text }),
       });
-
-      // STOMP 전송 (백엔드가 /app/chat/{roomId} 매핑 시)
-      stompRef.current?.send(`/app/chat/${roomId}`, { content: text });
+      
+      // 메시지 전송 후 목록 새로고침
+      await loadMessages();
     } catch (e) {
-      // 실패 시 간단 안내 (UI 토스트 등으로 대체 가능)
+      console.error('[CHATROOM] 전송 에러:', e);
     }
   };
 

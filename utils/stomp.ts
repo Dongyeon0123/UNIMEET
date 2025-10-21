@@ -13,8 +13,19 @@ export function createStompConnection(token?: string): StompConn {
   const client = new Client({
     webSocketFactory: () => new SockJS(WEBSOCKET_URL),
     connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
-    reconnectDelay: 3000,
-    debug: () => {},
+    reconnectDelay: 5000,
+    heartbeatIncoming: 10000,
+    heartbeatOutgoing: 10000,
+    debug: () => {}, // 디버그 로그 비활성화
+    onConnect: () => {
+      console.log('[채팅] 실시간 연결 성공');
+    },
+    onStompError: () => {
+      // 에러 무시 (ngrok 환경에서는 정상)
+    },
+    onWebSocketError: () => {
+      // 에러 무시
+    },
   });
 
   client.activate();

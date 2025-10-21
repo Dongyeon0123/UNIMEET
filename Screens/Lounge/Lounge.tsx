@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import Header from '../../navigation/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { API_BASE_URL } from '../../utils/env';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 import GradientScreen from '../../component/GradientScreen';
@@ -13,38 +13,43 @@ import GradientScreen from '../../component/GradientScreen';
 const Lounge: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const token = useSelector((state: RootState) => state.auth.token);
-  const [posts, setPosts] = useState(useSelector((state: RootState) => state.posts));
-  useEffect(() => {
-    const loadPosts = async () => {
-      console.log('[LOUNGE] 게시글 로드 시작');
-      try {
-        console.log('[LOUNGE] API 요청:', `${API_BASE_URL}/api/posts`);
-        console.log('[LOUNGE] 토큰:', token ? '있음' : '없음');
+  const [posts, setPosts] = useState<any[]>([]);
+
+  const loadPosts = useCallback(async () => {
+    console.log('[LOUNGE] 게시글 로드 시작');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/posts`, {
+        headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+      });
+      
+      console.log('[LOUNGE] 응답 상태:', res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[LOUNGE] 받은 데이터:', data);
+        console.log('[LOUNGE] 데이터 타입:', typeof data, '배열인가?', Array.isArray(data));
         
-        const res = await fetch(`${API_BASE_URL}/api/posts`, {
-          headers: { 'Authorization': token ? `Bearer ${token}` : '' },
-        });
+        const postsArray = Array.isArray(data) ? data : (data.posts || data.items || data.content || []);
+        console.log('[LOUNGE] 처리된 게시글 배열:', postsArray);
+        console.log('[LOUNGE] 게시글 개수:', postsArray.length);
         
-        console.log('[LOUNGE] 응답 상태:', res.status);
-        
-        if (res.ok) {
-          const data = await res.json();
-          console.log('[LOUNGE] 받은 데이터:', data);
-          
-          // 기대 응답: 배열 또는 { items: [] } 형태
-          const postsArray = Array.isArray(data) ? data : (data.items || []);
-          console.log('[LOUNGE] 처리된 게시글 배열:', postsArray);
-          setPosts(postsArray);
-        } else {
-          const errorText = await res.text();
-          console.error('[LOUNGE] API 에러:', errorText);
-        }
-      } catch (e) {
-        console.error('[LOUNGE] 네트워크 에러:', e);
+        setPosts(postsArray);
+        console.log('[LOUNGE] setPosts 완료');
+      } else {
+        const errorText = await res.text();
+        console.error('[LOUNGE] API 에러:', errorText);
       }
-    };
-    loadPosts();
+    } catch (e) {
+      console.error('[LOUNGE] 게시글 로드 에러:', e);
+    }
   }, [token]);
+
+  // 화면에 포커스될 때마다 게시글 새로고침
+  useFocusEffect(
+    useCallback(() => {
+      loadPosts();
+    }, [loadPosts])
+  );
   const comments = useSelector((state: RootState) => state.comments); // 댓글 배열 가져오기
 
   const handleNotificationPress = (): void => {
@@ -72,10 +77,18 @@ const Lounge: React.FC = () => {
           </View>
 
           <View style={styles.postList}>
+            {console.log('[LOUNGE] 렌더링 - posts 개수:', posts.length)}
+            {posts.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="document-text-outline" size={48} color="#CCC" />
+                <Text style={styles.emptyText}>아직 게시글이 없습니다</Text>
+              </View>
+            )}
             {posts
               .filter(post => !post.notice)
               .sort((a, b) => (b.id || 0) - (a.id || 0))
               .map(post => {
+                console.log('[LOUNGE] 게시글 렌더링:', post.id, post.title);
                 // 실제 댓글 수 계산
                 const commentCount = comments.filter(c => c.postId === post.id).length;
                 return (
@@ -182,6 +195,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#FF6B81',
     fontWeight: 'bold',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#999',
   },
   fab: {
     position: 'absolute',
