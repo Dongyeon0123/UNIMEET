@@ -43,16 +43,39 @@ const Chat: React.FC = () => {
           const list = Array.isArray(data) ? data : (data.chatRooms || []);
           console.log('[CHAT] 채팅방 리스트:', list);
           
-          // 채팅방 데이터 가공 및 안읽음 카운트 로드
+          // 채팅방 데이터 가공 및 안읽음 카운트, 마지막 메시지 로드
           const withUnread = await Promise.all(list.map(async (r: any) => {
             console.log('[CHAT] 채팅방 데이터:', r);
+            
+            // 마지막 메시지 가져오기
+            let lastMessage = '새로운 채팅방입니다';
+            let lastTime = new Date(r.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            
+            try {
+              const messagesRes = await fetch(`${API_BASE_URL}/api/chat/rooms/${r.id}/messages`, {
+                headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+              });
+              if (messagesRes.ok) {
+                const messages = await messagesRes.json();
+                const messageList = Array.isArray(messages) ? messages : [];
+                if (messageList.length > 0) {
+                  const lastMsg = messageList[messageList.length - 1];
+                  lastMessage = lastMsg.content || lastMsg.text || '메시지';
+                  if (lastMsg.createdAt) {
+                    lastTime = new Date(lastMsg.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('[CHAT] 마지막 메시지 로드 실패:', e);
+            }
             
             // 기본 채팅방 데이터 구조 생성
             const room: any = {
               id: r.id,
-              name: r.name || `채팅방 ${r.id.slice(-4)}`, // 이름이 없으면 ID로 생성
-              lastMessage: r.lastMessage || '새로운 채팅방입니다',
-              lastTime: r.lastTime || new Date(r.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+              name: r.name || r.title || `채팅방 ${r.id.slice(-4)}`, // name, title 모두 확인
+              lastMessage: lastMessage,
+              lastTime: lastTime,
               memberCount: r.participantIds?.length || r.memberCount || 2,
               profileColor: r.profileColor || ['#6846FF', '#FF6B81', '#4CAF50', '#FF9800'][Math.floor(Math.random() * 4)],
               active: r.active,

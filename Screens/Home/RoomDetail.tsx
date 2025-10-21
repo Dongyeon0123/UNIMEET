@@ -113,31 +113,43 @@ const RoomDetail: React.FC = () => {
           // 1:1 미팅인 경우
           if (maxParticipants === 2 && userIds.length === 2) {
             console.log('1:1 채팅방 생성 API 호출');
+            console.log('전달할 채팅방 이름:', roomData.title);
+            console.log('미팅방 데이터:', roomData);
+            
+            const requestBody = {
+              userAId: userIds[0],
+              userBId: userIds[1],
+              name: roomData.title // 미팅방 제목을 채팅방 이름으로 전달
+            };
+            console.log('1:1 채팅방 생성 요청 body:', requestBody);
+            
             chatRes = await fetch(`${API_BASE_URL}/api/chat/rooms`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': token ? `Bearer ${token}` : '',
               },
-              body: JSON.stringify({
-                userAId: userIds[0],
-                userBId: userIds[1],
-                name: roomData.title // 미팅방 제목을 채팅방 이름으로 전달
-              }),
+              body: JSON.stringify(requestBody),
             });
           } else {
             // 그룹 미팅인 경우 (2:2, 3:3 등)
             console.log('그룹 채팅방 생성 API 호출');
+            console.log('전달할 채팅방 제목:', roomData.title);
+            console.log('미팅방 데이터:', roomData);
+            
+            const requestBody = {
+              title: roomData.title,
+              participantIds: userIds
+            };
+            console.log('그룹 채팅방 생성 요청 body:', requestBody);
+            
             chatRes = await fetch(`${API_BASE_URL}/api/chat/rooms/group`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': token ? `Bearer ${token}` : '',
               },
-              body: JSON.stringify({
-                title: roomData.title,
-                participantIds: userIds
-              }),
+              body: JSON.stringify(requestBody),
             });
           }
           
