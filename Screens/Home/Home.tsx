@@ -314,7 +314,7 @@ const Home: React.FC = () => {
 
   // 초기 로드 및 토큰 변경 시 새로고침
   useEffect(() => {
-    setMeetingRooms([]);
+    console.log('[HOME] useEffect 실행 - 미팅방 새로고침');
     refreshRooms();
   }, [token]);
 

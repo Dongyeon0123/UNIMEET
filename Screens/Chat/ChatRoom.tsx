@@ -105,10 +105,10 @@ const ChatRoom: React.FC = () => {
               const incoming = {
                 id: Date.now(),
                 text: payload?.content ?? '',
-                mine: false,
+                mine: payload?.senderId === me?.id,
                 time: getKoreanAmPmTime(),
                 nickname: payload?.sender?.nickname ?? '상대',
-                avatar: 'person-circle-outline' as IoniconName,
+                avatar: (payload?.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
                 readCount: 1,
               };
               setMessages((prev) => [...prev, incoming]);
@@ -234,9 +234,11 @@ const ChatRoom: React.FC = () => {
                         : { marginRight: 8, marginLeft: 0 }
                     ]}
                 >
-                    <Text style={msg.mine ? styles.myReadCount : styles.readCount}>
-                      {msg.readCount ?? 1}
-                    </Text>
+                    {(msg.readCount ?? 1) > 0 && (
+                      <Text style={msg.mine ? styles.myReadCount : styles.readCount}>
+                        {msg.readCount ?? 1}
+                      </Text>
+                    )}
                     <Text style={styles.bubbleTime}>{msg.time}</Text>
                 </View>
                 </View>
