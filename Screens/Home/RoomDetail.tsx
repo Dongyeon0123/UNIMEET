@@ -11,44 +11,62 @@ import { API_BASE_URL } from '../../utils/env';
 
 const { width } = Dimensions.get('window');
 
-const ParticipantInfo: React.FC<{ p: any; color: string; index: number }> = ({ p, color, index }) => (
-  <View style={styles.participantCard}>
-    <View style={[styles.statusIndicator, { backgroundColor: p.isOnline ? '#4CAF50' : '#FFC107' }]} />
-    
-    <View style={styles.leftSection}>
-      <View style={[styles.avatarContainer, { borderColor: (p.department && p.department !== '미정') ? color : '#999' }]}>
-        <Ionicons name="person" size={20} color={(p.department && p.department !== '미정') ? color : '#999'} />
-      </View>
-      <View style={styles.basicInfo}>
-        <Text style={[styles.participantDepartment, { color: (p.department && p.department !== '미정') ? color : '#999' }]} numberOfLines={1} ellipsizeMode="tail">
-          {p.department || '미정'}
-        </Text>
-        <Text style={[styles.mbtiText, { backgroundColor: color + '20', color: color }]}>
-          {p.mbti || 'UNKNOWN'}
-        </Text>
-      </View>
-    </View>
-    
-    <View style={styles.rightSection}>
-      <View style={styles.detailRow}>
-        <View style={styles.detailItem}>
-          <Ionicons name="calendar-outline" size={12} color="#666" />
-          <Text style={styles.detailValue}>{p.age || '-'}세</Text>
+const ParticipantInfo: React.FC<{ p: any; color: string; index: number }> = ({ p, color, index }) => {
+  const isEmptySlot = !p.name || p.name === '' || p.name === '미정';
+  const displayColor = isEmptySlot ? '#999' : color;
+  const displayDepartment = isEmptySlot ? '빈 자리' : (p.department || '미정');
+  const displayMBTI = isEmptySlot ? 'UNKNOWN' : (p.mbti || 'UNKNOWN');
+  const displayAge = isEmptySlot ? '-' : (p.age || '-');
+  const displayStudentId = isEmptySlot ? '-' : (p.studentId?.slice(-2) || '-');
+  const displayInterests = isEmptySlot ? '관심사 없음' : (p.interests?.length ? p.interests.join(' • ') : '관심사 없음');
+
+  return (
+    <View style={[styles.participantCard, isEmptySlot && styles.emptyParticipantCard]}>
+      <View style={[styles.statusIndicator, { backgroundColor: isEmptySlot ? 'transparent' : (p.isOnline ? '#4CAF50' : '#FFC107') }]} />
+      
+      <View style={styles.leftSection}>
+        <View style={[styles.avatarContainer, { borderColor: displayColor }]}>
+          <Ionicons name="person" size={20} color={displayColor} style={isEmptySlot && { opacity: 0.4 }} />
         </View>
-        <View style={styles.detailItem}>
-          <Ionicons name="school-outline" size={12} color="#666" />
-          <Text style={styles.detailValue}>{p.studentId?.slice(-2) || '-'}</Text>
+        <View style={[styles.basicInfo, isEmptySlot && { alignItems: 'flex-start', width: '100%' }]}>
+          <Text style={[styles.participantDepartment, { color: displayColor }]} numberOfLines={1} ellipsizeMode="tail">
+            {displayDepartment}
+          </Text>
+          <Text style={[
+            styles.mbtiText, 
+            { 
+              backgroundColor: displayColor + '20', 
+              color: displayColor,
+              marginLeft: isEmptySlot ? 0 : 0,
+              textAlign: isEmptySlot ? 'left' : 'left'
+            }
+          ]}>
+            {displayMBTI}
+          </Text>
         </View>
       </View>
       
-      <View style={styles.interestsContainer}>
-        <Text style={styles.interestsText} numberOfLines={2} ellipsizeMode="tail">
-          {p.interests?.length ? p.interests.join(' • ') : '관심사 없음'}
-        </Text>
+      <View style={styles.rightSection}>
+        <View style={styles.detailRow}>
+          <View style={styles.detailItem}>
+            <Ionicons name="calendar-outline" size={12} color="#666" />
+            <Text style={styles.detailValue}>{displayAge}세</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="school-outline" size={12} color="#666" />
+            <Text style={styles.detailValue}>{displayStudentId}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.interestsContainer}>
+          <Text style={styles.interestsText} numberOfLines={2} ellipsizeMode="tail">
+            {displayInterests}
+          </Text>
+        </View>
       </View>
     </View>
-  </View>
-);
+  );
+};
 
 // 3개씩 끊어서 2차원 배열로 변환
 function chunkArray(arr: any[], size: number) {
@@ -63,7 +81,10 @@ const RoomDetail: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'RoomDetail'>>();
   const token = useSelector((state: RootState) => state.auth.token);
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
+  const currentUserGender = useSelector((state: RootState) => state.auth.user?.gender) as string | undefined;
   const [room, setRoom] = useState(route.params.room);
+  const [actualParticipants, setActualParticipants] = useState<any[]>([]);
 
   const normalizeRoom = (raw: any) => {
     if (!raw) return route.params.room;
@@ -109,6 +130,7 @@ const RoomDetail: React.FC = () => {
       title: raw?.title || route.params.room.title,
       type: uiType,
       participants,
+      backendParticipants, // 백엔드 참가자 데이터 저장
     } as any;
   };
 
@@ -122,15 +144,21 @@ const RoomDetail: React.FC = () => {
           const data = await res.json();
           const normalized = normalizeRoom(data);
           setRoom(normalized);
+          
+          // 실제 참가자 데이터 저장 (성별 제한 확인용)
+          const backendParticipants: any[] = Array.isArray(data?.participants) ? data.participants : (Array.isArray(data?.participants?.items) ? data.participants.items : []);
+          console.log('백엔드 참가자 데이터:', backendParticipants);
+          setActualParticipants(backendParticipants);
         }
       } catch (e) {}
     };
     loadDetail();
   }, [room.id, token]);
 
-  const confirmed = room.participants.filter(p => p.name && p.name !== '');
-  const maleList = confirmed.filter(p => p.gender === '남');
-  const femaleList = confirmed.filter(p => p.gender === '여');
+  // 실제 참가자만 필터링 (백엔드 데이터 기준)
+  const confirmed = room.participants.filter(p => p.name && p.name !== '' && p.name !== '미정' && p.id < 1000);
+  const maleList = room.participants.filter(p => p.gender === '남');
+  const femaleList = room.participants.filter(p => p.gender === '여');
   const isMixed = room.type === 'mixed';
   
   // 방 타입에 따른 최대 인원수 계산
@@ -154,6 +182,11 @@ const RoomDetail: React.FC = () => {
   console.log('남자:', maleList.length, '여자:', femaleList.length);
   console.log('최대 참가자 수:', maxParticipants);
   console.log('인원이 다 찼나:', isFull);
+  // 실제 백엔드 데이터로 성별 제한 로그 출력
+  const backendParticipants = (room as any).backendParticipants || actualParticipants;
+  const actualMaleCount = backendParticipants.filter((p: any) => p.gender === '남').length;
+  const actualFemaleCount = backendParticipants.filter((p: any) => p.gender === '여').length;
+  console.log('1:1 미팅 성별 제한:', !isMixed ? `남자 ${actualMaleCount}/1, 여자 ${actualFemaleCount}/1` : '해당없음');
 
   // 색상 결정 함수
   const getColor = (p: any) => {
@@ -247,16 +280,52 @@ const RoomDetail: React.FC = () => {
         {/* 신청 버튼 */}
         <View style={styles.buttonContainer}>
           {(() => {
-            const currentUserId = (useSelector as any)((state: RootState) => state.auth.user?.id);
             const alreadyJoined = currentUserId ? confirmed.some((p: any) => p.userId === currentUserId) : false;
+            
             if (alreadyJoined) {
               return (
                 <TouchableOpacity style={styles.fullButton} disabled>
-                  <Ionicons name="checkmark-circle" size={20} color="#999" />
-                  <Text style={styles.fullButtonText}>이미 신청한 미팅방입니다</Text>
+                  <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                  <Text style={[styles.fullButtonText, { color: '#4CAF50' }]}>신청되었습니다!</Text>
                 </TouchableOpacity>
               );
             }
+            
+            // 1:1 미팅에서 성별 제한 확인
+            if (!isMixed && currentUserGender) {
+              // 실제 참가자만 확인 (백엔드 데이터 기준)
+              // room 객체에서 직접 백엔드 데이터를 가져와서 사용
+              const backendParticipants = (room as any).backendParticipants || actualParticipants;
+              const actualMaleCount = backendParticipants.filter((p: any) => p.gender === '남').length;
+              const actualFemaleCount = backendParticipants.filter((p: any) => p.gender === '여').length;
+              const currentGenderCount = currentUserGender === '남' ? actualMaleCount : actualFemaleCount;
+              
+              // 1:1 미팅에서는 각 성별당 1명씩만 허용
+              const maxForGender = 1;
+              
+              console.log('성별 제한 확인:', {
+                currentUserGender,
+                actualMaleCount,
+                actualFemaleCount,
+                currentGenderCount,
+                maxForGender,
+                maxParticipants,
+                backendParticipants: backendParticipants.map((p: any) => ({ name: p.name, gender: p.gender })),
+                backendParticipantsLength: backendParticipants.length
+              });
+              
+              if (currentGenderCount >= maxForGender) {
+                return (
+                  <TouchableOpacity style={styles.fullButton} disabled>
+                    <Ionicons name="person" size={20} color="#999" />
+                    <Text style={styles.fullButtonText}>
+                      {currentUserGender === '남' ? '남자' : '여자'} 정원이 다 찼어요 ({currentGenderCount}/{maxForGender})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+            }
+            
             if (isFull) {
               return (
                 <TouchableOpacity style={styles.fullButton} disabled>
@@ -279,14 +348,23 @@ const RoomDetail: React.FC = () => {
                     });
                     if (resJoin.ok) {
                       Alert.alert('신청 완료', '미팅 신청이 완료되었습니다.');
-                    }
-                    const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
-                      headers: { 'Authorization': token ? `Bearer ${token}` : '' },
-                    });
-                    if (res.ok) {
-                      const data = await res.json();
-                      const normalized = normalizeRoom(data);
-                      setRoom(normalized);
+                      // 신청 성공 후 방 정보 즉시 새로고침
+                      const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
+                        headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        const normalized = normalizeRoom(data);
+                        setRoom(normalized);
+                        
+                        // 실제 참가자 데이터도 업데이트
+                        const backendParticipants: any[] = Array.isArray(data?.participants) ? data.participants : (Array.isArray(data?.participants?.items) ? data.participants.items : []);
+                        setActualParticipants(backendParticipants);
+                        console.log('방 정보 새로고침 완료:', normalized);
+                      }
+                    } else {
+                      const errorText = await resJoin.text();
+                      Alert.alert('신청 실패', errorText || '미팅 신청에 실패했습니다.');
                     }
                   } catch (e) {}
                 }}
@@ -445,6 +523,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  emptyParticipantCard: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#e0e0e0',
+    opacity: 0.7,
   },
   statusIndicator: {
     position: 'absolute',

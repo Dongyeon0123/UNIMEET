@@ -29,9 +29,9 @@ const ROOM_PRESETS: RoomPreset[] = [
 const Home: React.FC = () => {
   const toParticipant = (idx: number, gender: Gender, from?: any): Participant => ({
     id: idx,
-    name: (from?.name || from?.nickname || ''),
+    name: (from?.name || from?.nickname || '미정'),
     gender,
-    department: from?.department || '',
+    department: from?.department || '미정',
     age: Number(from?.age || 0),
     studentId: String(from?.studentId || ''),
     mbti: String(from?.mbti || ''),
@@ -294,15 +294,20 @@ const Home: React.FC = () => {
               : (Array.isArray(data?.meetingRooms) ? data.meetingRooms : []));
         if (Array.isArray(list)) {
           const mapped = list.map(mapBackendRoomToUI);
-          setMeetingRooms(mapped as any);
+          // 최신순으로 정렬 (ID 기준 내림차순 - ID가 클수록 최신)
+          const sorted = mapped.sort((a: any, b: any) => {
+            // ID 기준으로 내림차순 정렬 (ID가 클수록 최신)
+            return (b.id || 0) - (a.id || 0);
+          });
+          setMeetingRooms(sorted as any);
           return;
         }
       } catch (e) {
         console.warn('[HOME][LIST] Failed on endpoint:', e);
       }
     }
-    // 모든 시도가 실패한 경우 빈 배열 유지
-    setMeetingRooms([]);
+    // 모든 시도가 실패한 경우 기존 목록 유지 (빈 배열로 설정하지 않음)
+    console.warn('[HOME][LIST] 모든 엔드포인트 실패, 기존 목록 유지');
   };
 
   // 초기 로드 및 토큰 변경 시 새로고침
@@ -329,7 +334,7 @@ const Home: React.FC = () => {
 
   // 방이 다 찼는지(name이 모두 채워졌는지)
   const isRoomFull = (room: MeetingRoom) =>
-    room.participants.every((p: Participant) => p.name !== "");
+    room.participants.every((p: Participant) => p.name !== "" && p.name !== "미정");
 
   // 방 만들기
   const handleCreateRoom = () => {
@@ -360,21 +365,17 @@ const Home: React.FC = () => {
         Alert.alert('오류', resText || '미팅방 생성에 실패했습니다.');
         return;
       }
-      // 생성 성공: 응답에 meetingRoom 있으면 낙관적 반영
-      let createdObj: any = {};
-      try { createdObj = JSON.parse(resText); } catch {}
-      const createdRoom = createdObj?.meetingRoom || createdObj;
-      if (createdRoom && createdRoom.id) {
-        const mapped = mapBackendRoomToUI(createdRoom);
-        setMeetingRooms(prev => [mapped as any, ...(prev || [])]);
-      }
-      // 서버 목록 재조회로 최종 상태 동기화
-      // 모달 닫고 초기화 후 목록 재조회
+      // 모달 닫고 초기화
       setModalVisible(false);
       setRoomTitle('');
       setSelectedPreset(ROOM_PRESETS[0]);
-      // 방 목록 새로고침
-      await refreshRooms();
+      
+      // 방 목록 새로고침 (최신순 정렬 포함) - 실패해도 기존 목록 유지
+      try {
+        await refreshRooms();
+      } catch (e) {
+        console.warn('방 목록 새로고침 실패, 기존 목록 유지:', e);
+      }
     } catch (e: any) {
       console.error('[MEETING][CREATE] Failed:', e?.message || e);
       Alert.alert('오류', e?.message || '네트워크 오류가 발생했습니다.');
@@ -486,10 +487,10 @@ const Home: React.FC = () => {
                     <Text style={styles.mixedLabel}>혼성</Text>
                     <View style={styles.mixedGrid}>
                       {room.participants.map((participant) => (
-                        <View key={participant.id} style={[styles.gridCell, participant.name === '' ? styles.gridCellEmpty : null]}>
-                          <Ionicons name="person" size={14} style={[styles.mixedIcon, participant.name === '' ? { opacity: 0.4 } : null]} />
-                          <Text style={[styles.gridCellText, participant.name === '' ? styles.emptyText : null]}>
-                            {participant.name === '' ? '빈 자리' : (participant.department || participant.name)}
+                        <View key={participant.id} style={[styles.gridCell, participant.name === '' || participant.name === '미정' ? styles.gridCellEmpty : null]}>
+                          <Ionicons name="person" size={14} style={[styles.mixedIcon, participant.name === '' || participant.name === '미정' ? { opacity: 0.4 } : null]} />
+                          <Text style={[styles.gridCellText, participant.name === '' || participant.name === '미정' ? styles.emptyText : null]}>
+                            {participant.name === '' || participant.name === '미정' ? '빈 자리' : (participant.department || participant.name)}
                           </Text>
                         </View>
                       ))}
@@ -504,7 +505,7 @@ const Home: React.FC = () => {
                         {room.participants
                           .filter((participant) => participant.gender === "남")
                           .map((participant) => (
-                            participant.name === "" ? (
+                            participant.name === "" || participant.name === "미정" ? (
                               <View key={`empty-m-${participant.id}`} style={[styles.participantRow, styles.emptySlot]}>
                                 <Ionicons name="person" size={12} style={[styles.male, { opacity: 0.4 }]} />
                                 <Text style={[styles.participantText, styles.emptyText]}>빈 자리</Text>
@@ -527,7 +528,7 @@ const Home: React.FC = () => {
                         {room.participants
                           .filter((participant) => participant.gender === "여")
                           .map((participant) => (
-                            participant.name === "" ? (
+                            participant.name === "" || participant.name === "미정" ? (
                               <View key={`empty-f-${participant.id}`} style={[styles.participantRow, styles.emptySlot]}>
                                 <Ionicons name="person" size={12} style={[styles.female, { opacity: 0.4 }]} />
                                 <Text style={[styles.participantText, styles.emptyText]}>빈 자리</Text>

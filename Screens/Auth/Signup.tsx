@@ -90,6 +90,34 @@ const Signup: React.FC = () => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  // 생년월일 포맷팅 함수 (YYYY-MM-DD)
+  const formatBirthDate = (value: string) => {
+    // 숫자만 추출
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 4) {
+      return numbers;
+    } else if (numbers.length <= 6) {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4)}`;
+    } else {
+      return `${numbers.slice(0, 4)}-${numbers.slice(4, 6)}-${numbers.slice(6, 8)}`;
+    }
+  };
+
+  // 전화번호 포맷팅 함수 (010-0000-0000)
+  const formatPhoneNumber = (value: string) => {
+    // 숫자만 추출
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 3) {
+      return numbers;
+    } else if (numbers.length <= 7) {
+      return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
+    } else {
+      return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
+    }
+  };
+
   const validateStep1 = () => {
     const { email, password, confirmPassword } = form;
     
@@ -474,8 +502,9 @@ const Signup: React.FC = () => {
           placeholder="생년월일 (YYYY-MM-DD)"
           placeholderTextColor="#999"
           value={form.birth}
-          onChangeText={(value) => updateForm('birth', value)}
+          onChangeText={(value) => updateForm('birth', formatBirthDate(value))}
           keyboardType="numeric"
+          maxLength={10}
         />
       </View>
 
@@ -500,8 +529,9 @@ const Signup: React.FC = () => {
           placeholder="전화번호 (010-0000-0000)"
           placeholderTextColor="#999"
           value={form.phone}
-          onChangeText={(value) => updateForm('phone', value)}
+          onChangeText={(value) => updateForm('phone', formatPhoneNumber(value))}
           keyboardType="phone-pad"
+          maxLength={13}
         />
       </View>
     </>

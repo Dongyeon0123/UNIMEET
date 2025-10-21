@@ -9,6 +9,7 @@ export interface User {
   department: string;
   birth: string;
   phone: string;
+  gender: string; // "남" 또는 "여"
   mbti?: string;
   interests?: string[];
 }
