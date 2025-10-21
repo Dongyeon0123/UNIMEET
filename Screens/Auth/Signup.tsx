@@ -11,7 +11,7 @@ import {
   ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientScreen from '../../component/GradientScreen';
@@ -30,10 +30,15 @@ interface SignupForm {
   birth: string;
   phone: string;
   gender: string; // "남" 또는 "여"
+  mbti: string; // 선택 또는 필수 여부는 백엔드 스펙에 따름
+  interestsInput: string; // 쉼표 구분 입력 → 배열 변환
 }
+
+type SignupRoute = RouteProp<RootStackParamList, 'Signup'>;
 
 const Signup: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<SignupRoute>();
   
   const [form, setForm] = useState<SignupForm>({
     email: '',
@@ -46,7 +51,35 @@ const Signup: React.FC = () => {
     birth: '',
     phone: '',
     gender: '',
+    mbti: route.params?.prefilledMBTI || '',
+    interestsInput: (route.params?.prefilledInterests || []).join(', '),
   });
+
+  // 온보딩에서 돌아온 경우 값 반영하고 회원가입 진행
+  React.useEffect(() => {
+    if (route.params?.prefilledMBTI !== undefined || route.params?.prefilledInterests !== undefined) {
+      console.log('[SIGNUP] 온보딩에서 돌아옴:', {
+        prefilledMBTI: route.params?.prefilledMBTI,
+        prefilledInterests: route.params?.prefilledInterests,
+        signupForm: route.params?.signupForm
+      });
+      
+      const restoredForm = {
+        // signupForm이 있으면 기존 폼 데이터 복원 (이메일/패스워드 포함)
+        ...(route.params?.signupForm || {}),
+        // 온보딩에서 받은 MBTI/관심사 반영 (덮어쓰기)
+        mbti: route.params?.prefilledMBTI || '',
+        interestsInput: (route.params?.prefilledInterests || []).join(', '),
+      };
+      
+      console.log('[SIGNUP] 폼 데이터 복원:', restoredForm);
+      
+      setForm(restoredForm);
+      
+      // 복원된 데이터로 바로 회원가입 진행
+      handleSignupWithData(restoredForm);
+    }
+  }, [route.params?.prefilledMBTI, route.params?.prefilledInterests, route.params?.signupForm]);
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -106,13 +139,22 @@ const Signup: React.FC = () => {
       Alert.alert('오류', '성별은 "남" 또는 "여"로 입력해주세요.');
       return false;
     }
+
+    // MBTI가 입력된 경우 형식 보정 (대문자, 2~4자)
+    if (form.mbti && !/^[A-Za-z]{2,4}$/.test(form.mbti.trim())) {
+      Alert.alert('오류', 'MBTI는 영문 2~4자로 입력해주세요. (예: INTJ)');
+      return false;
+    }
     
     return true;
   };
 
   const handleNext = () => {
-    if (validateStep1()) {
+    if (currentStep === 1 && validateStep1()) {
       setCurrentStep(2);
+    } else if (currentStep === 2 && validateStep2()) {
+      // 개인정보 완료 후 MBTI 온보딩으로 이동 (현재 폼 데이터 전달)
+      (navigation as any).navigate('OnboardingMBTI', { signupForm: form });
     }
   };
 
@@ -120,18 +162,96 @@ const Signup: React.FC = () => {
     if (currentStep === 1) {
       navigation.goBack();
     } else {
-      setCurrentStep(1);
+      setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleSignup = async () => {
-    if (!validateStep2()) return;
+  const handleSignupWithData = async (formData: any) => {
+    // 필수 필드 검증
+    const signupData = {
+      email: formData.email,
+      password: formData.password,
+      name: formData.name,
+      nickname: formData.nickname,
+      studentId: formData.studentId,
+      department: formData.department,
+      birth: formData.birth && typeof formData.birth === 'string' && formData.birth.includes('.') 
+        ? formData.birth.replace(/\./g, '-') 
+        : formData.birth,
+      phone: formData.phone,
+      gender: formData.gender,
+      mbti: formData.mbti?.toUpperCase() || undefined,
+      interests: formData.interestsInput && typeof formData.interestsInput === 'string' && formData.interestsInput.trim()
+        ? formData.interestsInput.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : undefined,
+    };
+
+    // 필수 필드 검증
+    console.log('[SIGNUP] 복원된 데이터로 회원가입:', signupData);
+    
+    if (!signupData.email || !signupData.password || !signupData.name || !signupData.nickname || 
+        !signupData.studentId || !signupData.department || !signupData.birth || !signupData.phone || !signupData.gender) {
+      console.log('[SIGNUP] 필수 필드 누락:', {
+        email: !!signupData.email,
+        password: !!signupData.password,
+        name: !!signupData.name,
+        nickname: !!signupData.nickname,
+        studentId: !!signupData.studentId,
+        department: !!signupData.department,
+        birth: !!signupData.birth,
+        phone: !!signupData.phone,
+        gender: !!signupData.gender,
+      });
+      Alert.alert('오류', '필수 항목을 모두 입력해주세요.');
+      return;
+    }
 
     setIsLoading(true);
     const startedAt = Date.now();
     console.log('[SIGNUP] API_BASE_URL =', API_BASE_URL);
     console.log('[SIGNUP] Request → /auth/signup (timeout 30000ms)', {
+      ...signupData,
+      passwordLen: signupData.password?.length,
+    });
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signupData),
+        timeoutMs: 30000,
+      });
+      const elapsed = Date.now() - startedAt;
+      console.log('[SIGNUP] Response ← /auth/signup', response.status, `(${elapsed}ms)`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[SIGNUP] Error body:', errorText);
+        throw new Error(errorText || '회원가입에 실패했습니다.');
+      }
+      const data = await response.json();
+      console.log('[SIGNUP] Success:', data);
+      Alert.alert('회원가입 완료', '이메일 인증을 완료해주세요.', [
+        { text: '확인', onPress: () => navigation.replace('EmailVerification', { email: formData.email }) }
+      ]);
+    } catch (err: any) {
+      const elapsed = Date.now() - startedAt;
+      const isAbort = err?.name === 'AbortError';
+      console.error('[SIGNUP] Failed after', `${elapsed}ms`, isAbort ? '(AbortError)' : '', err?.message || err);
+      Alert.alert('오류', isAbort ? '요청 시간이 초과되었습니다. 네트워크를 확인해주세요.' : (err?.message || '회원가입 중 오류가 발생했습니다.'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async () => {
+    // 온보딩에서 돌아온 경우가 아니면 검증 수행
+    if (!route.params?.prefilledMBTI && !route.params?.prefilledInterests) {
+      if (!validateStep2()) return;
+    }
+
+    // 필수 필드 검증
+    const signupData = {
       email: form.email,
+      password: form.password,
       name: form.name,
       nickname: form.nickname,
       studentId: form.studentId,
@@ -139,27 +259,46 @@ const Signup: React.FC = () => {
       birth: (form.birth || '').includes('.') ? (form.birth || '').replace(/\./g, '-') : form.birth,
       phone: form.phone,
       gender: form.gender,
-      passwordLen: form.password?.length,
+      mbti: form.mbti?.toUpperCase() || undefined,
+      interests: form.interestsInput
+        ? form.interestsInput.split(',').map(s => s.trim()).filter(Boolean)
+        : undefined,
+    };
+
+    // 필수 필드 검증
+    console.log('[SIGNUP] 현재 폼 상태:', form);
+    console.log('[SIGNUP] signupData:', signupData);
+    
+    if (!signupData.email || !signupData.password || !signupData.name || !signupData.nickname || 
+        !signupData.studentId || !signupData.department || !signupData.birth || !signupData.phone || !signupData.gender) {
+      console.log('[SIGNUP] 필수 필드 누락:', {
+        email: !!signupData.email,
+        password: !!signupData.password,
+        name: !!signupData.name,
+        nickname: !!signupData.nickname,
+        studentId: !!signupData.studentId,
+        department: !!signupData.department,
+        birth: !!signupData.birth,
+        phone: !!signupData.phone,
+        gender: !!signupData.gender,
+      });
+      Alert.alert('오류', '필수 항목을 모두 입력해주세요.');
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const startedAt = Date.now();
+    console.log('[SIGNUP] API_BASE_URL =', API_BASE_URL);
+    console.log('[SIGNUP] Request → /auth/signup (timeout 30000ms)', {
+      ...signupData,
+      passwordLen: signupData.password?.length,
     });
     try {
       const response = await fetchWithTimeout(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-          name: form.name,
-          nickname: form.nickname,
-          studentId: form.studentId,
-          department: form.department,
-          birth: (form.birth || '').includes('.') ? (form.birth || '').replace(/\./g, '-') : form.birth, // YYYY-MM-DD
-          phone: form.phone,
-          gender: form.gender, // 필수 (스펙: 남/여)
-          // 선택 항목 (있으면 전송)
-          mbti: undefined,
-          interests: undefined,
-          height: undefined,
-        }),
+        body: JSON.stringify(signupData),
         timeoutMs: 30000,
       });
       const elapsed = Date.now() - startedAt;
@@ -368,6 +507,7 @@ const Signup: React.FC = () => {
     </>
   );
 
+
   return (
     <GradientScreen>
       <KeyboardAvoidingView 
@@ -402,7 +542,7 @@ const Signup: React.FC = () => {
             {/* 다음/가입 버튼 */}
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={currentStep === 1 ? handleNext : handleSignup}
+              onPress={currentStep === 2 ? handleNext : handleNext}
               disabled={isLoading}
               activeOpacity={0.8}
             >
@@ -420,10 +560,10 @@ const Signup: React.FC = () => {
                 ) : (
                   <>
                     <Text style={styles.actionButtonText}>
-                      {currentStep === 1 ? '다음' : '가입하기'}
+                      다음
                     </Text>
                     <Ionicons 
-                      name={currentStep === 1 ? "arrow-forward" : "checkmark"} 
+                      name="arrow-forward" 
                       size={20} 
                       color="#FFF" 
                     />

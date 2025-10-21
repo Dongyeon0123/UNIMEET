@@ -38,7 +38,7 @@ type OnboardingInterestsRouteProp = RouteProp<RootStackParamList, 'OnboardingInt
 const OnboardingInterests: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<OnboardingInterestsRouteProp>();
-  const { mbti } = route.params || {};
+  const { mbti, signupForm } = route.params || {};
   
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
@@ -61,17 +61,24 @@ const OnboardingInterests: React.FC = () => {
       Alert.alert('알림', '최소 1개 이상의 관심사를 선택해주세요.');
       return;
     }
-    
-    navigation.navigate('OnboardingHeight', { 
-      mbti, 
-      interests: selectedInterests 
+    // 회원가입 플로우로 되돌리기: Signup에 사전입력 전달
+    console.log('[OnboardingInterests] Signup으로 이동:', {
+      prefilledMBTI: mbti || '',
+      prefilledInterests: selectedInterests,
+      signupForm: signupForm
+    });
+    navigation.navigate('Signup', { 
+      prefilledMBTI: mbti || '',
+      prefilledInterests: selectedInterests,
+      signupForm: signupForm
     });
   };
 
   const handleSkip = () => {
-    navigation.navigate('OnboardingHeight', { 
-      mbti, 
-      interests: [] 
+    navigation.navigate('Signup', { 
+      prefilledMBTI: mbti || '', 
+      prefilledInterests: [],
+      signupForm: signupForm
     });
   };
 

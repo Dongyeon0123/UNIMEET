@@ -74,6 +74,10 @@ const Home: React.FC = () => {
       type: uiType,
       // @ts-ignore
       maxParticipants: max,
+      // @ts-ignore
+      maleCapacity: targetMale,
+      // @ts-ignore
+      femaleCapacity: targetFemale,
     } as any;
   };
 
@@ -315,13 +319,12 @@ const Home: React.FC = () => {
   // 인원수 표시
   const getPeopleLabel = (room: MeetingRoom) => {
     if (room.type === 'mixed') {
-      const confirmed = room.participants.filter(p => p.name && p.name !== '').length;
       const max = (room as any).maxParticipants || room.participants.length;
-      return `${confirmed}/${max}`;
+      return `${max}인`;
     }
-    const maleCountFilled :number = room.participants.filter(p => p.gender === "남" && p.name !== "").length;
-    const femaleCountFilled :number = room.participants.filter(p => p.gender === "여" && p.name !== "").length;
-    return `${maleCountFilled}:${femaleCountFilled}`;
+    const maleCap = (room as any).maleCapacity ?? Math.ceil(((room as any).maxParticipants || room.participants.length) / 2);
+    const femaleCap = (room as any).femaleCapacity ?? Math.floor(((room as any).maxParticipants || room.participants.length) / 2);
+    return `${maleCap}:${femaleCap}`;
   };
 
   // 방이 다 찼는지(name이 모두 채워졌는지)
@@ -975,7 +978,7 @@ const styles = StyleSheet.create({
   },
   mixedLabel: {
     fontWeight: '500',
-    color: '#767676',
+    color: '#FF9800',
     fontSize: 12,
     minWidth: 28,
     textAlignVertical: 'center',
@@ -989,23 +992,22 @@ const styles = StyleSheet.create({
   mixedGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
     paddingHorizontal: 6,
   },
   gridCell: {
-    width: '46%',
-    backgroundColor: '#FFF',
+    width: '48%',
+    backgroundColor: 'transparent',
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderWidth: 0,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    marginBottom: 8,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },
   gridCellEmpty: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'transparent',
   },
   gridCellText: {
     fontSize: 12,

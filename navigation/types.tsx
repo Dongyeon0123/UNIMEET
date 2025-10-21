@@ -33,9 +33,9 @@ export type RootStackParamList = {
   WritePost: undefined;
   AIMatching: undefined;
   Login: undefined;
-  Signup: undefined;
-  OnboardingMBTI: undefined;
-  OnboardingInterests: { mbti?: string };
+  Signup: { prefilledMBTI?: string; prefilledInterests?: string[]; signupForm?: any } | undefined;
+  OnboardingMBTI: { signupForm?: any } | undefined;
+  OnboardingInterests: { mbti?: string; signupForm?: any };
   OnboardingHeight: { mbti?: string; interests?: string[] };
   EmailVerification: { email: string };
   ProfileEdit: undefined;

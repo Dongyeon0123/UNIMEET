@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -270,13 +270,16 @@ const RoomDetail: React.FC = () => {
                 style={styles.applyButton}
                 onPress={async () => {
                   try {
-                    await fetch(`${API_BASE_URL}/api/meetings/${room.id}/join`, {
+                    const resJoin = await fetch(`${API_BASE_URL}/api/meetings/${room.id}/join`, {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
                         'Authorization': token ? `Bearer ${token}` : '',
                       },
                     });
+                    if (resJoin.ok) {
+                      Alert.alert('신청 완료', '미팅 신청이 완료되었습니다.');
+                    }
                     const res = await fetch(`${API_BASE_URL}/api/meetings/${room.id}`, {
                       headers: { 'Authorization': token ? `Bearer ${token}` : '' },
                     });

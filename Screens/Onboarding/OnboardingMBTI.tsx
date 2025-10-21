@@ -8,7 +8,7 @@ import {
   Dimensions 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import GradientScreen from '../../component/GradientScreen';
@@ -37,16 +37,27 @@ const MBTI_TYPES = [
 
 const OnboardingMBTI: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'OnboardingMBTI'>>();
   const [selectedMBTI, setSelectedMBTI] = useState<string>('');
 
   const handleNext = () => {
     if (selectedMBTI) {
-      navigation.navigate('OnboardingInterests', { mbti: selectedMBTI });
+      console.log('[OnboardingMBTI] OnboardingInterests로 이동:', {
+        mbti: selectedMBTI,
+        signupForm: route.params?.signupForm
+      });
+      navigation.navigate('OnboardingInterests', { 
+        mbti: selectedMBTI,
+        signupForm: route.params?.signupForm 
+      });
     }
   };
 
   const handleSkip = () => {
-    navigation.navigate('OnboardingInterests', { mbti: '' });
+    navigation.navigate('OnboardingInterests', { 
+      mbti: '',
+      signupForm: route.params?.signupForm 
+    });
   };
 
   return (
