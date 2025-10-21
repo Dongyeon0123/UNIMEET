@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import Header from '../../navigation/Header';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MeetingRoom, Participant, Gender, RootStackParamList } from '../../navigation/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -272,9 +272,9 @@ const Home: React.FC = () => {
   // 목록 새로고침: 여러 엔드포인트 순차 시도
   const refreshRooms = async () => {
     const endpoints = [
-      '/api/meetings/available',
-      '/api/meetings',
-      '/api/meetings/list',
+      '/api/meetings',        // 모든 미팅방 (가득 찬 것 포함)
+      '/api/meetings/list',   // 모든 미팅방 대체 엔드포인트
+      '/api/meetings/available', // 가능한 미팅방만 (마지막 옵션)
     ];
     for (const ep of endpoints) {
       try {
@@ -312,11 +312,13 @@ const Home: React.FC = () => {
     console.warn('[HOME][LIST] 모든 엔드포인트 실패, 기존 목록 유지');
   };
 
-  // 초기 로드 및 토큰 변경 시 새로고침
-  useEffect(() => {
-    console.log('[HOME] useEffect 실행 - 미팅방 새로고침');
-    refreshRooms();
-  }, [token]);
+  // 화면 포커스 시마다 새로고침 (미팅 신청 후 돌아왔을 때 반영)
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[HOME] 화면 포커스 - 미팅방 새로고침');
+      refreshRooms();
+    }, [token])
+  );
 
   // 모달 상태 및 입력값
   const [modalVisible, setModalVisible] = useState<boolean>(false);
