@@ -14,20 +14,38 @@ const ProfileDetail: React.FC = () => {
   const profile = useSelector((state: RootState) => state.profile);
   const token = useSelector((state: RootState) => state.auth.token);
 
+  // 현재 프로필 상태 로그
+  console.log('[PROFILE] 현재 프로필 상태:', profile);
+
   useEffect(() => {
     const fetchProfile = async () => {
+      if (!token) {
+        console.log('[PROFILE] 토큰이 없습니다.');
+        return;
+      }
+
+      console.log('[PROFILE] 프로필 정보 요청:', `${API_BASE_URL}/api/user/profile`);
+      
       try {
         const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
           headers: {
-            'Authorization': token ? `Bearer ${token}` : '',
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         });
+        
+        console.log('[PROFILE] 응답 상태:', res.status);
+        
         if (res.ok) {
           const data = await res.json();
+          console.log('[PROFILE] 프로필 데이터 받음:', data);
           dispatch(updateProfile(data));
+        } else {
+          const errorText = await res.text();
+          console.error('[PROFILE] 프로필 요청 실패:', res.status, errorText);
         }
       } catch (e) {
-        // 무시: 네트워크 오류 시 로컬 상태 표시
+        console.error('[PROFILE] 네트워크 오류:', e);
       }
     };
     fetchProfile();
@@ -37,15 +55,18 @@ const ProfileDetail: React.FC = () => {
     label: string;
     value: string;
     }[] = [
-      { label: '이름', value: profile.name },
-      { label: '닉네임', value: profile.nickname },
-      { label: '생년월일', value: profile.birth },
-      { label: '학과', value: profile.department },
-      { label: '학번', value: profile.studentId },
-      { label: '나이', value: profile.age },
-      { label: '키', value: profile.height },
-      { label: '전화번호', value: profile.phone },
-      { label: '가입일', value: profile.joinDate },
+      { label: '이름', value: profile.name || '미입력' },
+      { label: '닉네임', value: profile.nickname || '미입력' },
+      { label: '이메일', value: profile.email || '미입력' },
+      { label: '전화번호', value: profile.phone || '미입력' },
+      { label: '사용자 ID', value: profile.id || '미입력' },
+      // 백엔드에서 아직 제공하지 않는 필드들
+      { label: '생년월일', value: profile.birth || '미입력' },
+      { label: '학과', value: profile.department || '미입력' },
+      { label: '학번', value: profile.studentId || '미입력' },
+      { label: '나이', value: profile.age || '미입력' },
+      { label: '키', value: profile.height || '미입력' },
+      { label: '가입일', value: profile.joinDate || '미입력' },
     ];
 
   return (
