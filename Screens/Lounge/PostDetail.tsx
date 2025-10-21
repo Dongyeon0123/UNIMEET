@@ -14,6 +14,7 @@ const PostDetail: React.FC = () => {
   const { postId } = route.params;
 
   const token = useSelector((state: RootState) => state.auth.token);
+  const currentUserId = useSelector((state: RootState) => state.auth.user?.id);
   const [post, setPost] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState('');
@@ -105,8 +106,9 @@ const PostDetail: React.FC = () => {
             <View style={styles.actionBar}>
               <TouchableOpacity style={styles.actionBtn} onPress={async () => {
                 try {
-                  const liked = post?.likedByMe;
+                  const liked = post?.likedBy?.includes(currentUserId);
                   const method = liked ? 'DELETE' : 'POST';
+                  console.log('[좋아요] 현재 상태:', { liked, currentUserId, likedBy: post?.likedBy });
                   const res = await fetch(`${API_BASE_URL}/api/posts/${postId}/like`, {
                     method,
                     headers: { 'Authorization': token ? `Bearer ${token}` : '' },
@@ -114,11 +116,15 @@ const PostDetail: React.FC = () => {
                   if (res.ok) {
                     // 간단 재조회
                     const p = await fetch(`${API_BASE_URL}/api/posts/${postId}`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-                    if (p.ok) setPost(await p.json());
+                    if (p.ok) {
+                      const data = await p.json();
+                      console.log('[좋아요] 업데이트된 데이터:', data.post || data);
+                      setPost(data.post || data);
+                    }
                   }
                 } catch {}
               }}>
-                <Ionicons name={post?.likedByMe ? "heart" : "heart-outline"} size={18} color="#FF6B81" />
+                <Ionicons name={post?.likedBy?.includes(currentUserId) ? "heart" : "heart-outline"} size={18} color="#FF6B81" />
                 <Text style={styles.actionText}>{post.likeCount ?? post.likes ?? 0}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionBtn}>
@@ -160,7 +166,10 @@ const PostDetail: React.FC = () => {
                       });
                       if (res.ok) {
                         const c = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-                        if (c.ok) setComments(await c.json());
+                        if (c.ok) {
+                          const data = await c.json();
+                          setComments(data.comments || data);
+                        }
                       }
                     } catch {}
                   }}>
@@ -193,7 +202,10 @@ const PostDetail: React.FC = () => {
                   if (!res.ok) throw new Error(await res.text());
                   setInput('');
                   const c = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`, { headers: { 'Authorization': token ? `Bearer ${token}` : '' } });
-                  if (c.ok) setComments(await c.json());
+                  if (c.ok) {
+                    const data = await c.json();
+                    setComments(data.comments || data);
+                  }
                 } catch (e: any) {
                   Alert.alert('오류', e?.message || '댓글 등록 실패');
                 }
