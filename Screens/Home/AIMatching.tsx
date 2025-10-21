@@ -7,7 +7,8 @@ import {
   ScrollView, 
   Dimensions,
   Animated,
-  ActivityIndicator 
+  ActivityIndicator,
+  Alert 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -76,6 +77,9 @@ const AIMatching: React.FC = () => {
           
           // 성별 필터링: 남자는 여자만, 여자는 남자만
           const filteredUsers = allUsers.filter((user: any) => {
+            // 임시로 필터링 비활성화 - 디버깅용
+            // return true;
+            
             if (!currentUserGender) return true; // 성별 정보 없으면 모두 표시
             
             // 남자는 여자만, 여자는 남자만 매칭
@@ -390,6 +394,41 @@ const AIMatching: React.FC = () => {
                     : '다양한 관점을 나눌 수 있는 좋은 기회가 될 것 같아요! 🤝'
                   }
                 </Text>
+                
+                {/* 매칭 신청 버튼 */}
+                <TouchableOpacity 
+                  style={[
+                    styles.matchRequestButton,
+                    { backgroundColor: getCompatibilityColor(currentUser.compatibility) }
+                  ]}
+                  onPress={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE_URL}/api/matches/${currentUser.matchId}/request`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': token ? `Bearer ${token}` : '',
+                        },
+                      });
+                      
+                      if (res.ok) {
+                        Alert.alert(
+                          '매칭 신청 완료',
+                          `${currentUser.name}님에게 매칭 신청을 보냈습니다! 💕`,
+                          [{ text: '확인' }]
+                        );
+                      } else {
+                        const errorText = await res.text();
+                        Alert.alert('매칭 신청 실패', errorText || '다시 시도해주세요.');
+                      }
+                    } catch (e) {
+                      Alert.alert('오류', '매칭 신청 중 문제가 발생했습니다.');
+                    }
+                  }}
+                >
+                  <Ionicons name="heart" size={20} color="#FFF" />
+                  <Text style={styles.matchRequestButtonText}>매칭 신청하기</Text>
+                </TouchableOpacity>
               </View>
             </Animated.View>
           )}
@@ -401,7 +440,7 @@ const AIMatching: React.FC = () => {
               onPress={prevUser}
               disabled={currentUserIndex === 0}
             >
-              <Ionicons name="chevron-back" size={20} color={currentUserIndex === 0 ? "#CCC" : "#6846FF"} />
+              <Ionicons name="chevron-back" size={20} color={currentUserIndex === 0 ? "#CCC" : "#666"} />
               <Text style={[styles.navButtonText, currentUserIndex === 0 && styles.navButtonTextDisabled]}>
                 이전
               </Text>
@@ -421,7 +460,7 @@ const AIMatching: React.FC = () => {
               <Text style={[styles.navButtonText, currentUserIndex === users.length - 1 && styles.navButtonTextDisabled]}>
                 다음
               </Text>
-              <Ionicons name="chevron-forward" size={20} color={currentUserIndex === users.length - 1 ? "#CCC" : "#6846FF"} />
+              <Ionicons name="chevron-forward" size={20} color={currentUserIndex === users.length - 1 ? "#CCC" : "#666"} />
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -597,7 +636,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     textAlign: 'center',
-    color: '#FFF',
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
     marginTop: 8,
@@ -657,6 +696,26 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 20,
+  },
+  matchRequestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  matchRequestButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   navigationContainer: {
     flexDirection: 'row',
@@ -667,16 +726,16 @@ const styles = StyleSheet.create({
   navButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
   },
   navButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   navButtonText: {
-    color: '#6846FF',
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
     marginHorizontal: 4,
@@ -685,13 +744,13 @@ const styles = StyleSheet.create({
     color: '#CCC',
   },
   pageIndicator: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 16,
   },
   pageText: {
-    color: '#FFF',
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
   },

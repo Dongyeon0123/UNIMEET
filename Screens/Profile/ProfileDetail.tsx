@@ -39,7 +39,49 @@ const ProfileDetail: React.FC = () => {
         if (res.ok) {
           const data = await res.json();
           console.log('[PROFILE] 프로필 데이터 받음:', data);
-          dispatch(updateProfile(data));
+          
+          // 나이 계산 함수
+          const calculateAge = (birthDate: string) => {
+            if (!birthDate) return '';
+            try {
+              const birth = new Date(birthDate);
+              const today = new Date();
+              let age = today.getFullYear() - birth.getFullYear();
+              const monthDiff = today.getMonth() - birth.getMonth();
+              if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                age--;
+              }
+              return String(age);
+            } catch {
+              return '';
+            }
+          };
+          
+          const birthDate = data.birth || data.birthDate || data.birthday;
+          const calculatedAge = data.age ? String(data.age) : calculateAge(birthDate);
+          
+          // 백엔드 데이터를 프론트엔드 형식으로 매핑
+          const mappedData = {
+            id: data.id || data.userId,
+            name: data.name,
+            nickname: data.nickname,
+            email: data.email,
+            phone: data.phone || data.phoneNumber,
+            birth: birthDate,
+            department: data.department || data.major,
+            studentId: data.studentId,
+            age: calculatedAge,
+            height: data.height ? String(data.height) : '',
+            joinDate: data.joinDate || data.createdAt || data.registeredAt,
+            mbti: data.mbti,
+            interests: data.interests || [],
+            gender: data.gender,
+            prefer: data.prefer || data.Prefer,
+            nonPrefer: data.nonPrefer,
+          };
+          
+          console.log('[PROFILE] 매핑된 프로필 데이터:', mappedData);
+          dispatch(updateProfile(mappedData));
         } else {
           const errorText = await res.text();
           console.error('[PROFILE] 프로필 요청 실패:', res.status, errorText);

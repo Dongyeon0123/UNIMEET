@@ -1,17 +1,87 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import Header from '../../navigation/Header';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store';
 import type { RootStackParamList } from '../../navigation/types';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import GradientScreen from '../../component/GradientScreen';
+import { API_BASE_URL } from '../../utils/env';
+import { updateProfile } from '../../store/profileSlice';
 
 const Profile: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const dispatch = useDispatch();
   const profile = useSelector((state: RootState) => state.profile);
+  const token = useSelector((state: RootState) => state.auth.token);
+
+  // 화면이 포커스될 때마다 프로필 로드
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchProfile = async () => {
+        if (!token) return;
+
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            
+            // 나이 계산 함수
+            const calculateAge = (birthDate: string) => {
+              if (!birthDate) return '';
+              try {
+                const birth = new Date(birthDate);
+                const today = new Date();
+                let age = today.getFullYear() - birth.getFullYear();
+                const monthDiff = today.getMonth() - birth.getMonth();
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                  age--;
+                }
+                return String(age);
+              } catch {
+                return '';
+              }
+            };
+            
+            const birthDate = data.birth || data.birthDate || data.birthday;
+            const calculatedAge = data.age ? String(data.age) : calculateAge(birthDate);
+            
+            const mappedData = {
+              id: data.id || data.userId,
+              name: data.name,
+              nickname: data.nickname,
+              email: data.email,
+              phone: data.phone || data.phoneNumber,
+              birth: birthDate,
+              department: data.department || data.major,
+              studentId: data.studentId,
+              age: calculatedAge,
+              height: data.height ? String(data.height) : '',
+              joinDate: data.joinDate || data.createdAt || data.registeredAt,
+              mbti: data.mbti,
+              interests: data.interests || [],
+              gender: data.gender,
+              prefer: data.prefer || data.Prefer,
+              nonPrefer: data.nonPrefer,
+            };
+            
+            dispatch(updateProfile(mappedData));
+          }
+        } catch (e) {
+          console.error('[PROFILE] 프로필 로드 실패:', e);
+        }
+      };
+      fetchProfile();
+    }, [dispatch, token])
+  );
 
   const handleSettingsPress = () => {
     navigation.navigate('Settings');
