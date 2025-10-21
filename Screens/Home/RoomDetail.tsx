@@ -86,6 +86,94 @@ const RoomDetail: React.FC = () => {
   const [room, setRoom] = useState(route.params.room);
   const [actualParticipants, setActualParticipants] = useState<any[]>([]);
 
+  // 미팅 성립 확인 및 채팅방 생성 함수
+  const checkAndCreateChatRoom = async (roomData: any, participants: any[]) => {
+    try {
+      const maxParticipants = roomData.maxParticipants || roomData.capacity || roomData.max;
+      const currentParticipants = participants.length;
+      
+      console.log('미팅 성립 확인:', {
+        currentParticipants,
+        maxParticipants,
+        isFull: currentParticipants >= maxParticipants
+      });
+      
+      // 미팅이 성립되었는지 확인 (정원이 다 찼는지)
+      if (currentParticipants >= maxParticipants) {
+        console.log('미팅 성립! 채팅방 생성 시도...', { currentParticipants, maxParticipants });
+        
+        // 모든 참가자의 userId 추출
+        const userIds = participants.map(p => p.userId).filter(id => id);
+        
+        if (userIds.length >= 2) {
+          console.log('채팅방 생성 참가자:', userIds);
+          
+          let chatRes;
+          
+          // 1:1 미팅인 경우
+          if (maxParticipants === 2 && userIds.length === 2) {
+            console.log('1:1 채팅방 생성 API 호출');
+            chatRes = await fetch(`${API_BASE_URL}/api/chat/rooms`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : '',
+              },
+              body: JSON.stringify({
+                userAId: userIds[0],
+                userBId: userIds[1],
+                name: roomData.title // 미팅방 제목을 채팅방 이름으로 전달
+              }),
+            });
+          } else {
+            // 그룹 미팅인 경우 (2:2, 3:3 등)
+            console.log('그룹 채팅방 생성 API 호출');
+            chatRes = await fetch(`${API_BASE_URL}/api/chat/rooms/group`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : '',
+              },
+              body: JSON.stringify({
+                title: roomData.title,
+                participantIds: userIds
+              }),
+            });
+          }
+          
+          if (chatRes.ok) {
+            const chatData = await chatRes.json();
+            console.log('채팅방 생성 성공:', chatData);
+            
+            Alert.alert(
+              '미팅 성립!', 
+              '모든 참가자가 모였습니다. 채팅방이 생성되었습니다.',
+              [
+                { text: '채팅방으로 이동', onPress: () => navigation.navigate('ChatRoom', { roomId: chatData.roomId || chatData.id }) },
+                { text: '나중에', style: 'cancel' }
+              ]
+            );
+          } else {
+            const errorText = await chatRes.text();
+            console.warn('채팅방 생성 실패:', errorText);
+            
+            // 500 에러인 경우 서버 문제임을 알림
+            if (chatRes.status === 500) {
+              Alert.alert(
+                '채팅방 생성 실패', 
+                '서버에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'
+              );
+            }
+          }
+        } else {
+          console.warn('참가자가 2명 미만이어서 채팅방을 생성할 수 없습니다:', userIds.length);
+        }
+      }
+    } catch (error) {
+      console.error('채팅방 생성 중 오류:', error);
+    }
+  };
+
   const normalizeRoom = (raw: any) => {
     if (!raw) return route.params.room;
     const uiType = raw?.type === 'MIXED' ? 'mixed' : (raw?.type === 'PAIR' ? 'pair' : (raw?.type || route.params.room.type));
@@ -361,6 +449,9 @@ const RoomDetail: React.FC = () => {
                         const backendParticipants: any[] = Array.isArray(data?.participants) ? data.participants : (Array.isArray(data?.participants?.items) ? data.participants.items : []);
                         setActualParticipants(backendParticipants);
                         console.log('방 정보 새로고침 완료:', normalized);
+                        
+                        // 미팅 성립 확인 및 채팅방 생성
+                        await checkAndCreateChatRoom(data, backendParticipants);
                       }
                     } else {
                       const errorText = await resJoin.text();

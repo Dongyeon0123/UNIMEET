@@ -16,16 +16,32 @@ const Lounge: React.FC = () => {
   const [posts, setPosts] = useState(useSelector((state: RootState) => state.posts));
   useEffect(() => {
     const loadPosts = async () => {
+      console.log('[LOUNGE] 게시글 로드 시작');
       try {
+        console.log('[LOUNGE] API 요청:', `${API_BASE_URL}/api/posts`);
+        console.log('[LOUNGE] 토큰:', token ? '있음' : '없음');
+        
         const res = await fetch(`${API_BASE_URL}/api/posts`, {
           headers: { 'Authorization': token ? `Bearer ${token}` : '' },
         });
+        
+        console.log('[LOUNGE] 응답 상태:', res.status);
+        
         if (res.ok) {
           const data = await res.json();
+          console.log('[LOUNGE] 받은 데이터:', data);
+          
           // 기대 응답: 배열 또는 { items: [] } 형태
-          setPosts(Array.isArray(data) ? data : (data.items || []));
+          const postsArray = Array.isArray(data) ? data : (data.items || []);
+          console.log('[LOUNGE] 처리된 게시글 배열:', postsArray);
+          setPosts(postsArray);
+        } else {
+          const errorText = await res.text();
+          console.error('[LOUNGE] API 에러:', errorText);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('[LOUNGE] 네트워크 에러:', e);
+      }
     };
     loadPosts();
   }, [token]);
@@ -36,6 +52,7 @@ const Lounge: React.FC = () => {
   };
 
   const handleWritePress = () => {
+    console.log('[LOUNGE] 글쓰기 버튼 클릭');
     navigation.navigate('WritePost');
   };
 

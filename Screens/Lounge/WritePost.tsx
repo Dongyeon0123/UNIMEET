@@ -28,37 +28,62 @@ const WritePost: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async () => {
+    console.log('[WRITE_POST] 글쓰기 시작:', { title: title.trim(), content: content.trim() });
+    
     if (!title.trim()) {
+      console.log('[WRITE_POST] 제목 없음 에러');
       Alert.alert('오류', '제목을 입력해주세요.');
       return;
     }
 
     setIsLoading(true);
+    console.log('[WRITE_POST] API 요청 시작:', `${API_BASE_URL}/api/posts`);
 
     try {
+      const requestBody = {
+        title: title.trim(),
+        text: content.trim(),
+        anonymous: true,
+      };
+      
+      console.log('[WRITE_POST] 요청 데이터:', requestBody);
+      console.log('[WRITE_POST] 토큰:', token ? '있음' : '없음');
+
       const res = await fetch(`${API_BASE_URL}/api/posts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : '',
         },
-        body: JSON.stringify({
-          title: title.trim(),
-          text: content.trim(),
-          anonymous: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log('[WRITE_POST] 응답 상태:', res.status);
+      
       if (!res.ok) {
         const errText = await res.text();
+        console.error('[WRITE_POST] API 에러:', errText);
+        
+        // 500 에러인 경우 서버 문제임을 알림
+        if (res.status === 500) {
+          throw new Error('서버에 문제가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        
         throw new Error(errText || '등록에 실패했습니다.');
       }
+      
       const created = await res.json();
+      console.log('[WRITE_POST] 생성된 게시글:', created);
+      
       dispatch(addPost(created));
       setIsLoading(false);
+      
+      console.log('[WRITE_POST] 성공적으로 완료');
       Alert.alert('완료', '게시글이 등록되었습니다.', [
         { text: '확인', onPress: () => navigation.goBack() }
       ]);
     } catch (e: any) {
+      console.error('[WRITE_POST] 에러 발생:', e);
       setIsLoading(false);
       Alert.alert('오류', e?.message || '등록 중 오류가 발생했습니다.');
     }

@@ -299,6 +299,8 @@ const Home: React.FC = () => {
             // ID 기준으로 내림차순 정렬 (ID가 클수록 최신)
             return (b.id || 0) - (a.id || 0);
           });
+          
+          console.log('미팅방 목록 정렬 완료:', sorted.map(r => ({ id: r.id, title: r.title })));
           setMeetingRooms(sorted as any);
           return;
         }

@@ -23,33 +23,68 @@ const Chat: React.FC = () => {
 
   useEffect(() => {
     const loadRooms = async () => {
+      console.log('[CHAT] 채팅방 목록 로드 시작');
       try {
+        console.log('[CHAT] API 요청:', `${API_BASE_URL}/api/chat/rooms`);
+        console.log('[CHAT] 토큰:', token ? '있음' : '없음');
+        
         const res = await fetch(`${API_BASE_URL}/api/chat/rooms`, {
           headers: {
             'Authorization': token ? `Bearer ${token}` : '',
           },
         });
+        
+        console.log('[CHAT] 응답 상태:', res.status);
+        
         if (res.ok) {
           const data = await res.json();
+          console.log('[CHAT] 받은 데이터:', data);
+          
           const list = Array.isArray(data) ? data : (data.chatRooms || []);
-          // 안읽음 카운트 로드
+          console.log('[CHAT] 채팅방 리스트:', list);
+          
+          // 채팅방 데이터 가공 및 안읽음 카운트 로드
           const withUnread = await Promise.all(list.map(async (r: any) => {
+            console.log('[CHAT] 채팅방 데이터:', r);
+            
+            // 기본 채팅방 데이터 구조 생성
+            const room: any = {
+              id: r.id,
+              name: r.name || `채팅방 ${r.id.slice(-4)}`, // 이름이 없으면 ID로 생성
+              lastMessage: r.lastMessage || '새로운 채팅방입니다',
+              lastTime: r.lastTime || new Date(r.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+              memberCount: r.participantIds?.length || r.memberCount || 2,
+              profileColor: r.profileColor || ['#6846FF', '#FF6B81', '#4CAF50', '#FF9800'][Math.floor(Math.random() * 4)],
+              active: r.active,
+              createdAt: r.createdAt,
+              participantIds: r.participantIds,
+              unread: 0
+            };
+            
             try {
-              if (!me?.id) return { ...r, unread: r.unread ?? 0 };
+              if (!me?.id) return room;
               const u = await fetch(`${API_BASE_URL}/api/chat/rooms/${r.id}/unread-count?userId=${me.id}`, {
                 headers: { 'Authorization': token ? `Bearer ${token}` : '' },
               });
               if (u.ok) {
                 const { count } = await u.json();
-                return { ...r, unread: count };
+                room.unread = count;
               }
-            } catch {}
-            return { ...r, unread: r.unread ?? 0 };
+            } catch (e) {
+              console.error('[CHAT] 안읽음 카운트 로드 실패:', e);
+            }
+            
+            return room;
           }));
+          
+          console.log('[CHAT] 최종 채팅방 데이터:', withUnread);
           setRooms(withUnread);
+        } else {
+          const errorText = await res.text();
+          console.error('[CHAT] API 에러:', errorText);
         }
       } catch (e) {
-        // 무시: 네트워크 실패 시 기존 더미 유지
+        console.error('[CHAT] 네트워크 에러:', e);
       }
     };
     loadRooms();
