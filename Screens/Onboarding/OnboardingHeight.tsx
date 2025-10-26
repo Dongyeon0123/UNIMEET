@@ -28,7 +28,9 @@ const OnboardingHeight: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<OnboardingHeightRouteProp>();
   const dispatch = useDispatch();
-  const { mbti, interests } = route.params || {};
+  const { prefilledMBTI, prefilledInterests, signupForm } = route.params || {};
+  const mbti = prefilledMBTI;
+  const interests = prefilledInterests;
   
   const [height, setHeight] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,43 +39,35 @@ const OnboardingHeight: React.FC = () => {
     setHeight(selectedHeight);
   };
 
-  const handleComplete = async () => {
+  const handleComplete = () => {
     if (!height.trim()) {
       Alert.alert('알림', '키를 입력해주세요.');
       return;
     }
 
-    setIsLoading(true);
-
-    // 온보딩 완료 시뮬레이션
-    setTimeout(() => {
-      // 임시 사용자 데이터로 로그인 처리 (실제로는 회원가입 시 받은 데이터 사용)
-      const userData = {
-        id: '1',
-        email: 'newuser@unimeet.com',
-        name: '새 사용자',
-        nickname: '신규회원',
-        studentId: '20학번',
-        department: '컴퓨터공학과',
-        birth: '2001.01.23',
-        phone: '010-1234-5678',
-        height: height,
-        mbti: mbti || '',
-        interests: interests || [],
-      };
-
-      // Redux store에 로그인 및 사용자 정보 저장
-      dispatch(loginSuccess(userData));
-      
-      setIsLoading(false);
-      Alert.alert('환영합니다!', 'UniMeet에 오신 것을 환영합니다!');
-      
-      // 로그인 상태가 변경되면 자동으로 BottomTabs로 이동됩니다
-    }, 1500);
+    // Signup으로 이동하면서 모든 온보딩 데이터 전달
+    console.log('[OnboardingHeight] Signup으로 이동:', {
+      prefilledMBTI: mbti || '',
+      prefilledInterests: interests || [],
+      prefilledHeight: height,
+      signupForm: signupForm
+    });
+    
+    navigation.navigate('Signup', { 
+      prefilledMBTI: mbti || '',
+      prefilledInterests: interests || [],
+      prefilledHeight: height,
+      signupForm: signupForm
+    });
   };
 
   const handleSkip = () => {
-    handleComplete();
+    navigation.navigate('Signup', { 
+      prefilledMBTI: mbti || '', 
+      prefilledInterests: interests || [],
+      prefilledHeight: '',
+      signupForm: signupForm
+    });
   };
 
   const handleBack = () => {
@@ -184,7 +178,7 @@ const OnboardingHeight: React.FC = () => {
               !height.trim() && styles.completeButtonDisabled
             ]}
             onPress={handleComplete}
-            disabled={isLoading || !height.trim()}
+            disabled={!height.trim()}
             activeOpacity={0.8}
           >
             <LinearGradient
@@ -193,17 +187,10 @@ const OnboardingHeight: React.FC = () => {
               start={{x: 0, y: 0}}
               end={{x: 1, y: 0}}
             >
-              {isLoading ? (
-                <View style={styles.loadingContainer}>
-                  <Ionicons name="refresh" size={20} color="#FFF" />
-                  <Text style={styles.completeButtonText}>완료 중...</Text>
-                </View>
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-                  <Text style={styles.completeButtonText}>완료</Text>
-                </>
-              )}
+              <>
+                <Ionicons name="arrow-forward-circle" size={20} color="#FFF" />
+                <Text style={styles.completeButtonText}>다음</Text>
+              </>
             </LinearGradient>
           </TouchableOpacity>
         </View>

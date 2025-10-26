@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
 import { Ionicons, Entypo } from '@expo/vector-icons';
 import GradientScreen from '../../component/GradientScreen';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -51,6 +51,10 @@ const ChatRoom: React.FC = () => {
   const [input, setInput] = useState('');
   const [showPanel, setShowPanel] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const [opponentDepartment, setOpponentDepartment] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
     // 히스토리 로드
@@ -61,17 +65,25 @@ const ChatRoom: React.FC = () => {
         });
         if (res.ok) {
           const data = await res.json();
-          const mapped = (Array.isArray(data) ? data : []).map((m: any, idx: number) => ({
-            id: m.id || idx + 1,
-            text: m.content || '',
-            mine: m.senderId === me?.id,
-            time: getKoreanAmPmTime(),
-            nickname: m.sender || (m.senderId === me?.id ? '나' : '상대'),
-            avatar: (m.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
-            // 내가 보낸 메시지: 상대방이 읽지 않았으면 1 (안 읽음), 읽었으면 0 (읽음)
-            // 상대방이 보낸 메시지: 항상 0 (표시 안 함)
-            readCount: m.senderId === me?.id ? (m.read ? 0 : 1) : 0,
-          }));
+          const mapped = (Array.isArray(data) ? data : []).map((m: any, idx: number) => {
+            // 첫 메시지에서 상대방 학과 추출
+            if (!opponentDepartment && m.senderId !== me?.id) {
+              const dept = m.senderDepartment || m.department;
+              if (dept) setOpponentDepartment(dept);
+            }
+            
+            return {
+              id: m.id || idx + 1,
+              text: m.content || '',
+              mine: m.senderId === me?.id,
+              time: getKoreanAmPmTime(),
+              nickname: m.senderId === me?.id ? '나' : (m.senderDepartment || m.department || m.sender || '상대'),
+              avatar: (m.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
+              // 내가 보낸 메시지: 상대방이 읽지 않았으면 1 (안 읽음), 읽었으면 0 (읽음)
+              // 상대방이 보낸 메시지: 항상 0 (표시 안 함)
+              readCount: m.senderId === me?.id ? (m.read ? 0 : 1) : 0,
+            };
+          });
           setMessages(mapped);
           setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
         }
@@ -109,12 +121,19 @@ const ChatRoom: React.FC = () => {
           conn.subscribe(`/topic/chat/${roomId}`, (msg) => {
             try {
               const payload = JSON.parse(msg.body);
+              
+              // 상대방 메시지에서 학과 정보 업데이트
+              if (payload?.senderId !== me?.id && !opponentDepartment) {
+                const dept = payload?.senderDepartment ?? payload?.department;
+                if (dept) setOpponentDepartment(dept);
+              }
+              
               const incoming = {
                 id: Date.now(),
                 text: payload?.content ?? '',
                 mine: payload?.senderId === me?.id,
                 time: getKoreanAmPmTime(),
-                nickname: payload?.senderNickname ?? payload?.sender?.nickname ?? '상대',
+                nickname: payload?.senderId === me?.id ? '나' : (payload?.senderDepartment ?? payload?.department ?? payload?.senderNickname ?? payload?.sender?.nickname ?? '상대'),
                 avatar: (payload?.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
                 // 내가 보낸 메시지: 1 (아직 안 읽음)
                 // 상대방이 보낸 메시지: 0 (표시 안 함)
@@ -149,7 +168,7 @@ const ChatRoom: React.FC = () => {
           text: m.content || '',
           mine: m.senderId === me?.id,
           time: getKoreanAmPmTime(),
-          nickname: m.sender || (m.senderId === me?.id ? '나' : '상대'),
+          nickname: m.senderId === me?.id ? '나' : (m.senderDepartment || m.department || m.sender || '상대'),
           avatar: (m.senderId === me?.id ? 'person-circle' : 'person-circle-outline') as IoniconName,
           // 내가 보낸 메시지: 상대방이 읽지 않았으면 1, 읽었으면 0
           // 상대방이 보낸 메시지: 항상 0 (표시 안 함)
@@ -195,7 +214,7 @@ const ChatRoom: React.FC = () => {
         <View style={styles.titleBox}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={styles.title} numberOfLines={1}>
-              {room?.name || '채팅방'}
+              {opponentDepartment || room?.name || '채팅방'}
             </Text>
             <Text style={styles.memberCount}>
               {room ? `${room.memberCount}` : ''}
@@ -203,14 +222,82 @@ const ChatRoom: React.FC = () => {
           </View>
         </View>
         <View style={styles.rightIcons}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => alert('검색')}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setIsSearching(!isSearching)}>
             <Ionicons name="search" size={22} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => alert('메뉴')}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMenu(!showMenu)}>
             <Entypo name="menu" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* 검색 바 */}
+      {isSearching && (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#999" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="메시지 검색..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* 메뉴 드롭다운 */}
+      {showMenu && (
+        <View style={styles.menuDropdown}>
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={async () => {
+              setShowMenu(false);
+              Alert.alert(
+                '채팅방 나가기',
+                '정말 채팅방을 나가시겠습니까?',
+                [
+                  { text: '취소', style: 'cancel' },
+                  {
+                    text: '나가기',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const res = await fetch(`${API_BASE_URL}/api/chat/rooms/${roomId}/leave`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': token ? `Bearer ${token}` : '',
+                          },
+                          body: JSON.stringify({ userId: me?.id }),
+                        });
+                        if (res.ok) {
+                          Alert.alert('채팅방 나가기', '채팅방에서 나갔습니다.', [
+                            { text: '확인', onPress: () => navigation.goBack() }
+                          ]);
+                        } else {
+                          const errorText = await res.text();
+                          Alert.alert('오류', errorText || '채팅방 나가기에 실패했습니다.');
+                        }
+                      } catch (e) {
+                        Alert.alert('오류', '채팅방 나가기 중 문제가 발생했습니다.');
+                      }
+                    }
+                  }
+                ]
+              );
+            }}
+          >
+            <Ionicons name="exit-outline" size={20} color="#FF3B30" />
+            <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>채팅방 나가기</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -224,7 +311,13 @@ const ChatRoom: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
-          {messages.map(msg => (
+          {messages
+            .filter(msg => {
+              // 검색 필터링
+              if (!searchQuery.trim()) return true;
+              return msg.text.toLowerCase().includes(searchQuery.toLowerCase());
+            })
+            .map(msg => (
             <View
               key={msg.id}
               style={[
@@ -510,6 +603,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6846FF',
     fontWeight: 'bold',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
+    padding: 0,
+  },
+  menuDropdown: {
+    position: 'absolute',
+    top: 115,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 160,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 1000,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuItemText: {
+    fontSize: 15,
+    marginLeft: 12,
+    fontWeight: '500',
   },
   memberCount: {
     fontSize: 16,

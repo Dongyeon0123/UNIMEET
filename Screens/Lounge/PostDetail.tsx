@@ -18,6 +18,7 @@ const PostDetail: React.FC = () => {
   const [post, setPost] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [input, setInput] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -70,10 +71,58 @@ const PostDetail: React.FC = () => {
           <View style={styles.titleBox}>
             <Text style={styles.title}>라운지</Text>
           </View>
-          <TouchableOpacity onPress={() => alert('더보기')} style={styles.sideButton}>
-            <Entypo name="dots-three-horizontal" size={22} color="#fff" />
-          </TouchableOpacity>
+          {post.authorId === currentUserId && (
+            <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.sideButton}>
+              <Entypo name="dots-three-horizontal" size={22} color="#fff" />
+            </TouchableOpacity>
+          )}
         </View>
+
+        {/* 메뉴 드롭다운 (내 게시글인 경우만) */}
+        {showMenu && post.authorId === currentUserId && (
+          <View style={styles.menuDropdown}>
+            <TouchableOpacity 
+              style={styles.menuItem}
+              onPress={async () => {
+                setShowMenu(false);
+                Alert.alert(
+                  '게시글 삭제',
+                  '정말 이 게시글을 삭제하시겠습니까?',
+                  [
+                    { text: '취소', style: 'cancel' },
+                    {
+                      text: '삭제',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          const res = await fetch(`${API_BASE_URL}/api/posts/${postId}`, {
+                            method: 'DELETE',
+                            headers: {
+                              'Authorization': token ? `Bearer ${token}` : '',
+                            },
+                          });
+                          if (res.ok) {
+                            Alert.alert('게시글 삭제', '게시글이 삭제되었습니다.', [
+                              { text: '확인', onPress: () => navigation.goBack() }
+                            ]);
+                          } else {
+                            const errorText = await res.text();
+                            Alert.alert('오류', errorText || '게시글 삭제에 실패했습니다.');
+                          }
+                        } catch (e) {
+                          Alert.alert('오류', '게시글 삭제 중 문제가 발생했습니다.');
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+              <Text style={[styles.menuItemText, { color: '#FF3B30' }]}>게시글 삭제</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.comment}>
@@ -94,9 +143,6 @@ const PostDetail: React.FC = () => {
                 <Text style={styles.author}>{post.authorName || post.author || post.nickname || '익명'}</Text>
                 <Text style={styles.date}>{post.createdAt || ''}</Text>
               </View>
-              <TouchableOpacity onPress={() => alert('더보기')}>
-                <Entypo name="dots-three-horizontal" size={18} color="#B1B1B1" />
-              </TouchableOpacity>
             </View>
             {/* 제목 */}
             <Text style={styles.postTitle}>{post.title}</Text>
@@ -387,6 +433,32 @@ const styles = StyleSheet.create({
     color: '#FF6B81',
     marginLeft: 2,
     fontWeight: 'bold',
+  },
+  menuDropdown: {
+    position: 'absolute',
+    top: 105,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 8,
+    minWidth: 160,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    zIndex: 1000,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuItemText: {
+    fontSize: 15,
+    marginLeft: 12,
+    fontWeight: '500',
   },
   centered: {
     alignItems: 'center',

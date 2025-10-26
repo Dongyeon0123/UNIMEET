@@ -61,13 +61,13 @@ const OnboardingInterests: React.FC = () => {
       Alert.alert('알림', '최소 1개 이상의 관심사를 선택해주세요.');
       return;
     }
-    // 회원가입 플로우로 되돌리기: Signup에 사전입력 전달
-    console.log('[OnboardingInterests] Signup으로 이동:', {
+    // 키 선택 페이지로 이동
+    console.log('[OnboardingInterests] OnboardingHeight로 이동:', {
       prefilledMBTI: mbti || '',
       prefilledInterests: selectedInterests,
       signupForm: signupForm
     });
-    navigation.navigate('Signup', { 
+    navigation.navigate('OnboardingHeight', { 
       prefilledMBTI: mbti || '',
       prefilledInterests: selectedInterests,
       signupForm: signupForm
@@ -75,7 +75,7 @@ const OnboardingInterests: React.FC = () => {
   };
 
   const handleSkip = () => {
-    navigation.navigate('Signup', { 
+    navigation.navigate('OnboardingHeight', { 
       prefilledMBTI: mbti || '', 
       prefilledInterests: [],
       signupForm: signupForm

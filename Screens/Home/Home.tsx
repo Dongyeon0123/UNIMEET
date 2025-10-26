@@ -399,7 +399,7 @@ const Home: React.FC = () => {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.comment}>
           <Ionicons name="rocket-outline" size={12} color="#3D3D3D" style={styles.icon} />
-          <Text style={styles.commentText}>여기는 개발자 코멘트를 적는 곳.</Text>
+          <Text style={styles.commentText}>미팅방 생성 후에 매칭이 되면 채팅방 생성 가능이 가능해요!</Text>
         </View>
 
         <View style={styles.guideBox}>

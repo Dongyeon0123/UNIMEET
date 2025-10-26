@@ -43,9 +43,11 @@ const Chat: React.FC = () => {
           const list = Array.isArray(data) ? data : (data.chatRooms || []);
           console.log('[CHAT] 채팅방 리스트:', list);
           
-          // 채팅방 데이터 가공 및 안읽음 카운트, 마지막 메시지 로드
-          const withUnread = await Promise.all(list.map(async (r: any) => {
-            console.log('[CHAT] 채팅방 데이터:', r);
+         // 채팅방 데이터 가공 및 안읽음 카운트, 마지막 메시지 로드
+         const withUnread = await Promise.all(list.map(async (r: any) => {
+           console.log('[CHAT] 채팅방 데이터:', r);
+           console.log('[CHAT] 채팅방 name 필드:', r.name);
+           console.log('[CHAT] 채팅방 title 필드:', r.title);
             
             // 마지막 메시지 가져오기
             let lastMessage = '새로운 채팅방입니다';
